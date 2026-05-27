@@ -116,3 +116,49 @@ export async function runValidation(
 export function excelReportUrl(validationId: string): string {
   return `${API_BASE}/validate/${validationId}/excel`;
 }
+
+// --- FundsXML releases (GitHub) ------------------------------------------
+
+export interface FundsXmlAsset {
+  filename: string;
+  download_url: string;
+  size: number;
+  content_type: string | null;
+}
+
+export interface FundsXmlRelease {
+  tag_name: string;
+  name: string | null;
+  published_at: string;
+  prerelease: boolean;
+  html_url: string;
+  assets: FundsXmlAsset[];
+}
+
+export interface FundsXmlReleasesResponse {
+  releases: FundsXmlRelease[];
+  cached_at: string;
+  ttl_seconds: number;
+}
+
+export async function listFundsXmlReleases(): Promise<FundsXmlReleasesResponse> {
+  return handle<FundsXmlReleasesResponse>(
+    await fetch(`${API_BASE}/fundsxml/releases`),
+  );
+}
+
+export async function loadXsdFromRelease(
+  tagName: string,
+  mainFilename: string,
+): Promise<XsdInfo> {
+  return handle<XsdInfo>(
+    await fetch(
+      `${API_BASE}/fundsxml/releases/${encodeURIComponent(tagName)}/load`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ main_filename: mainFilename }),
+      },
+    ),
+  );
+}

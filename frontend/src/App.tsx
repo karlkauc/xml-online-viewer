@@ -6,6 +6,7 @@ import {
   uploadXsdFile,
   uploadXsdText,
   uploadXsdUrl,
+  loadXsdFromRelease,
 } from "./api/client";
 import { useApp } from "./stores/appStore";
 import clsx from "clsx";
@@ -32,6 +33,10 @@ export default function App() {
   );
   const onXsdText = useCallback(async (c: string) => setXsd(await uploadXsdText(c)), [setXsd]);
   const onXsdUrl = useCallback(async (u: string) => setXsd(await uploadXsdUrl(u)), [setXsd]);
+  const onXsdRelease = useCallback(
+    async (tag: string, filename: string) => setXsd(await loadXsdFromRelease(tag, filename)),
+    [setXsd],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -55,6 +60,7 @@ export default function App() {
           onXsdFile={onXsdFile}
           onXsdText={onXsdText}
           onXsdUrl={onXsdUrl}
+          onXsdRelease={onXsdRelease}
         />
       </div>
 

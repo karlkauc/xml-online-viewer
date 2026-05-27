@@ -62,6 +62,56 @@ def _safe_relative_path(filename: str, fallback: str) -> PurePosixPath:
 
 _REF_TAGS = {"include", "import", "redefine", "override"}
 
+# Well-known schemas bundled with the app so multi-file schemas that reference
+# them (e.g. FundsXML importing xmldsig-core-schema.xsd) compile even when the
+# upload/release doesn't ship them. Keyed by bare filename.
+_RES_DIR = Path(__file__).parent / "resources"
+BUNDLED_SCHEMAS: dict[str, bytes] = (
+    {p.name: p.read_bytes() for p in _RES_DIR.glob("*.xsd")} if _RES_DIR.is_dir() else {}
+)
+
+
+def _iter_schema_locations(data: bytes) -> list[str]:
+    """Return all ``schemaLocation`` values of include/import/redefine/override
+    in a single schema document (empty on parse failure)."""
+    try:
+        root = etree.fromstring(data, make_parser())
+    except etree.XMLSyntaxError:
+        return []
+    locs: list[str] = []
+    for el in root.iter():
+        if not isinstance(el.tag, str) or etree.QName(el).localname not in _REF_TAGS:
+            continue
+        loc = el.get("schemaLocation")
+        if loc and "://" not in loc:
+            locs.append(loc)
+    return locs
+
+
+def _inject_bundled_dependencies(files: dict[str, bytes]) -> None:
+    """Add bundled copies of referenced-but-missing well-known schemas in-place,
+    so the schema compiles offline. Iterates to a fixpoint in case a bundled
+    schema itself references another bundled one."""
+    if not BUNDLED_SCHEMAS:
+        return
+    while True:
+        present = {PurePosixPath(k).name for k in files}
+        added = False
+        for name, data in list(files.items()):
+            if not name.lower().endswith(".xsd"):
+                continue
+            base = PurePosixPath(name).parent
+            for loc in _iter_schema_locations(data):
+                bn = PurePosixPath(loc).name
+                if bn in present or bn not in BUNDLED_SCHEMAS:
+                    continue
+                resolved = str(_safe_relative_path(str(base / loc), loc))
+                files[resolved] = BUNDLED_SCHEMAS[bn]
+                present.add(bn)
+                added = True
+        if not added:
+            return
+
 
 def _referenced_paths(files: dict[str, bytes]) -> set[str]:
     """Collect the set of file paths referenced via ``schemaLocation`` across
@@ -72,21 +122,11 @@ def _referenced_paths(files: dict[str, bytes]) -> set[str]:
     for name, data in files.items():
         if not name.lower().endswith(".xsd"):
             continue
-        try:
-            root = etree.fromstring(data, make_parser())
-        except etree.XMLSyntaxError:
-            continue
         base = PurePosixPath(name).parent
-        for el in root.iter():
-            if not isinstance(el.tag, str) or etree.QName(el).localname not in _REF_TAGS:
-                continue
-            loc = el.get("schemaLocation")
-            if not loc or "://" in loc:
-                continue
+        for loc in _iter_schema_locations(data):
             # Resolve relative to the referencing file's directory, then
             # normalise the same way ZIP entries are keyed.
-            resolved = str(_safe_relative_path(str(base / loc), loc))
-            referenced.add(resolved)
+            referenced.add(str(_safe_relative_path(str(base / loc), loc)))
             referenced.add(PurePosixPath(loc).name)  # also match by bare name
     return referenced
 
@@ -184,7 +224,29 @@ def load_xsd(
         name = str(_safe_relative_path(main_filename or "schema.xsd", "schema.xsd"))
         files, main = {name: main_bytes}, name
 
+    _inject_bundled_dependencies(files)
     stored = StoredXsd(xsd_id="", main_filename=main, files=files)
     # Compile once now to fail fast on an invalid schema.
+    build_xmlschema(stored)
+    return stored
+
+
+def load_xsd_from_files(files: dict[str, bytes], main_filename: str) -> StoredXsd:
+    """Build a :class:`StoredXsd` from an in-memory ``filename -> bytes`` map
+    (e.g. release assets pre-fetched from GitHub), verifying it compiles.
+
+    Keys are normalised to the same relative-path scheme as ZIP entries, so
+    filename-based ``schemaLocation`` imports resolve. Raises :class:`XsdError`
+    if the main file is missing or the schema does not compile."""
+    normalised: dict[str, bytes] = {}
+    for name, data in files.items():
+        _reject_known_bombs(data)
+        normalised[str(_safe_relative_path(name, name))] = data
+    main = str(_safe_relative_path(main_filename, main_filename))
+    if main not in normalised:
+        raise XsdError(f"main file {main_filename!r} not found in release assets")
+
+    _inject_bundled_dependencies(normalised)
+    stored = StoredXsd(xsd_id="", main_filename=main, files=normalised)
     build_xmlschema(stored)
     return stored

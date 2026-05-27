@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app import __version__
+from app.api.releases import router as releases_router
 from app.api.validate import router as validate_router
 from app.api.xml import router as xml_router
 from app.api.xsd import router as xsd_router
@@ -143,6 +144,7 @@ async def health() -> dict[str, str]:
 app.include_router(xml_router, prefix="/api")
 app.include_router(xsd_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
+app.include_router(releases_router, prefix="/api")
 
 # --- Static frontend ------------------------------------------------------
 # Serves the built React SPA. In dev, the Vite dev-server runs separately and

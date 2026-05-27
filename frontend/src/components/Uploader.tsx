@@ -1,8 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
 import { ApiError } from "../api/client";
+import { FundsXmlReleases } from "./FundsXmlReleases";
 
-type Mode = "file" | "text" | "url";
+type Mode = "file" | "text" | "url" | "releases";
+
+const MODE_LABEL: Record<Mode, string> = {
+  file: "Datei",
+  text: "Einfügen",
+  url: "URL",
+  releases: "Releases",
+};
 
 interface SourceLoaderProps {
   title: string;
@@ -15,6 +23,9 @@ interface SourceLoaderProps {
   // When set, a ZIP may contain several schemas; an optional input lets the
   // user name the main file if it cannot be auto-detected.
   showMainFilename?: boolean;
+  // When set, a "Releases" tab lets the user load a schema from a published
+  // FundsXML GitHub release.
+  onRelease?: (tagName: string, filename: string) => Promise<void>;
 }
 
 /** A single load surface (file / paste / URL) for either XML or XSD input. */
@@ -27,6 +38,7 @@ function SourceLoader({
   onText,
   onUrl,
   showMainFilename,
+  onRelease,
 }: SourceLoaderProps) {
   const [mode, setMode] = useState<Mode>("file");
   const [busy, setBusy] = useState(false);
@@ -56,7 +68,7 @@ function SourceLoader({
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         <div className="flex gap-1" role="tablist">
-          {(["file", "text", "url"] as Mode[]).map((m) => (
+          {(["file", "text", "url", ...(onRelease ? ["releases"] : [])] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
@@ -70,7 +82,7 @@ function SourceLoader({
               )}
               onClick={() => setMode(m)}
             >
-              {m === "file" ? "Datei" : m === "text" ? "Einfügen" : "URL"}
+              {MODE_LABEL[m]}
             </button>
           ))}
         </div>
@@ -170,6 +182,13 @@ function SourceLoader({
         </div>
       )}
 
+      {mode === "releases" && onRelease && (
+        <FundsXmlReleases
+          busy={busy}
+          onSelect={(tag, filename) => void run(() => onRelease(tag, filename))}
+        />
+      )}
+
       {busy && <p className="mt-2 text-xs text-slate-500">Lädt…</p>}
       {error && (
         <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
@@ -192,6 +211,7 @@ interface UploaderProps {
   onXsdFile: (f: File, mainFilename?: string) => Promise<void>;
   onXsdText: (c: string) => Promise<void>;
   onXsdUrl: (u: string) => Promise<void>;
+  onXsdRelease: (tagName: string, filename: string) => Promise<void>;
 }
 
 export function Uploader(props: UploaderProps) {
@@ -214,6 +234,7 @@ export function Uploader(props: UploaderProps) {
         onFile={props.onXsdFile}
         onText={props.onXsdText}
         onUrl={props.onXsdUrl}
+        onRelease={props.onXsdRelease}
         showMainFilename
       />
     </div>
