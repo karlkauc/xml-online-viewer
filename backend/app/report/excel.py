@@ -100,15 +100,12 @@ def build_report(
     wb.properties.created = generated_at
     wb.properties.modified = generated_at
 
-    ws["A1"] = f"{APP_NAME} – Validierungsreport"
+    ws["A1"] = "Validierungsreport"
     ws["A1"].font = _TITLE_FONT
 
+    # Application identity lives only in the workbook properties (above), not
+    # in the worksheet.
     meta = [
-        ("Applikation", APP_NAME),
-        ("Version", __version__),
-        ("Autor", APP_AUTHOR),
-        ("URL", APP_URL),
-        ("", ""),
         ("XML-Datei", xml_filename),
         ("XSD-Schema", xsd_filename),
         ("Erstellt", generated_at.strftime("%Y-%m-%d %H:%M:%S UTC")),
