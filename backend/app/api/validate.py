@@ -31,6 +31,7 @@ class StoredValidation:
     response: ValidationResponse
     xml_filename: str
     xsd_filename: str
+    reformatted_xml: str
 
 
 @router.post("/validate", response_model=ValidationResponse)
@@ -58,6 +59,7 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
             response=result,
             xml_filename=stored_xml.model.filename,
             xsd_filename=stored_xsd.main_filename,
+            reformatted_xml=stored_xml.model.reformatted_xml,
         ),
     )
     logger.info(
@@ -80,6 +82,7 @@ async def download_excel(validation_id: str) -> StreamingResponse:
         stored.response,
         xml_filename=stored.xml_filename,
         xsd_filename=stored.xsd_filename,
+        reformatted_xml=stored.reformatted_xml,
     )
     filename = f"validierungsreport_{validation_id[:8]}.xlsx"
     return StreamingResponse(

@@ -22,6 +22,9 @@ _HEADER_FILL = PatternFill("solid", fgColor="1F2937")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
 _META_FONT = Font(bold=True)
 _TITLE_FONT = Font(bold=True, size=14)
+# Highlight applied to the offending line's cell to make it stand out.
+_ERROR_LINE_FILL = PatternFill("solid", fgColor="FEF08A")
+_MONO_FONT = Font(name="Consolas")
 
 _COLUMNS = [
     ("#", 6),
@@ -32,7 +35,23 @@ _COLUMNS = [
     ("Nachricht", 90),
     ("Typ", 28),
     ("Domain", 18),
+    ("Zeile davor", 52),
+    ("Fehlerzeile", 52),
+    ("Zeile danach", 52),
 ]
+# 1-based column index of the highlighted "Fehlerzeile" column.
+_ERROR_LINE_COL = 10
+
+
+def _context_lines(lines: list[str], line: int | None) -> tuple[str | None, str | None, str | None]:
+    """Return (line above, error line, line below) for a 1-based line number,
+    or (None, None, None) if unavailable."""
+    if not line or line < 1 or line > len(lines):
+        return (None, None, None)
+    idx = line - 1
+    prev = lines[idx - 1] if idx - 1 >= 0 else None
+    nxt = lines[idx + 1] if idx + 1 < len(lines) else None
+    return (prev, lines[idx], nxt)
 
 
 def build_report(
@@ -40,8 +59,15 @@ def build_report(
     *,
     xml_filename: str,
     xsd_filename: str,
+    reformatted_xml: str = "",
 ) -> bytes:
-    """Return the bytes of an .xlsx workbook describing ``result``."""
+    """Return the bytes of an .xlsx workbook describing ``result``.
+
+    ``reformatted_xml`` is the pretty-printed document the error line numbers
+    index into; it is used to emit the line before, the error line (highlighted)
+    and the line after each error, to ease locating the problem.
+    """
+    lines = reformatted_xml.splitlines()
     wb = Workbook()
     ws = wb.active
     ws.title = "Validierung"
@@ -91,6 +117,7 @@ def build_report(
 
     for i, err in enumerate(result.errors, start=1):
         r = header_row + i
+        prev_line, err_line, next_line = _context_lines(lines, err.line)
         values = [
             i,
             err.severity,
@@ -100,11 +127,19 @@ def build_report(
             err.message,
             err.type_name,
             err.domain,
+            prev_line,
+            err_line,
+            next_line,
         ]
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=r, column=col_idx, value=value)
             if col_idx in (5, 6):  # path, message wrap
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
+            elif col_idx >= 9:  # context lines: monospace, wrapped
+                cell.font = _MONO_FONT
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                if col_idx == _ERROR_LINE_COL:
+                    cell.fill = _ERROR_LINE_FILL
 
     last_row = header_row + len(result.errors)
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
