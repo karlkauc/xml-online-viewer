@@ -41,6 +41,7 @@ export interface XmlNodeData {
   selected: boolean;
   hasError: boolean;
   errorCount: number;
+  descendantErrorCount: number;
   [key: string]: unknown;
 }
 
@@ -54,6 +55,7 @@ interface Ctx {
   expandedIds: Set<string>;
   selectedId: string | null;
   errorsByNodeId: Map<string, ValidationErrorItem[]>;
+  descendantErrorCounts: Map<string, number>;
   nodes: Node[];
   edges: Edge[];
 }
@@ -83,6 +85,7 @@ function pushNode(node: XmlNode, x: number, y: number, ctx: Ctx): void {
     selected: ctx.selectedId === node.id,
     hasError: !!errors && errors.length > 0,
     errorCount: errors?.length ?? 0,
+    descendantErrorCount: ctx.descendantErrorCounts.get(node.id) ?? 0,
   };
   ctx.nodes.push({
     id: node.id,
@@ -135,11 +138,13 @@ export function buildDiagramGraph(
   expandedIds: Set<string>,
   selectedId: string | null,
   errorsByNodeId: Map<string, ValidationErrorItem[]>,
+  descendantErrorCounts: Map<string, number>,
 ): { nodes: Node[]; edges: Edge[] } {
   const ctx: Ctx = {
     expandedIds,
     selectedId,
     errorsByNodeId,
+    descendantErrorCounts,
     nodes: [],
     edges: [],
   };

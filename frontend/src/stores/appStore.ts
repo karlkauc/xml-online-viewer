@@ -48,11 +48,31 @@ function indexErrors(
   return map;
 }
 
+/** For each node, the number of errors *strictly below* it (not its own), so a
+ * collapsed parent can signal that an erroneous node hides in its subtree.
+ * Single post-order pass over the tree. */
+function computeDescendantErrorCounts(
+  root: XmlNode,
+  errorsByNodeId: Map<string, ValidationErrorItem[]>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const dfs = (node: XmlNode): number => {
+    const own = errorsByNodeId.get(node.id)?.length ?? 0;
+    let below = 0;
+    for (const child of node.children) below += dfs(child);
+    if (below > 0) counts.set(node.id, below);
+    return own + below;
+  };
+  dfs(root);
+  return counts;
+}
+
 interface AppState {
   xmlDoc: XmlDocModel | null;
   xsdInfo: XsdInfo | null;
   validation: ValidationResponse | null;
   errorsByNodeId: Map<string, ValidationErrorItem[]>;
+  descendantErrorCounts: Map<string, number>;
 
   expandedIds: Set<string>;
   selectedNodeId: string | null;
@@ -78,6 +98,7 @@ export const useApp = create<AppState>((set, get) => ({
   xsdInfo: null,
   validation: null,
   errorsByNodeId: new Map(),
+  descendantErrorCounts: new Map(),
 
   expandedIds: new Set(),
   selectedNodeId: null,
@@ -94,14 +115,31 @@ export const useApp = create<AppState>((set, get) => ({
       selectedNodeId: null,
       validation: null,
       errorsByNodeId: new Map(),
+      descendantErrorCounts: new Map(),
     }),
 
-  setXsd: (info) => set({ xsdInfo: info, validation: null, errorsByNodeId: new Map() }),
+  setXsd: (info) =>
+    set({
+      xsdInfo: info,
+      validation: null,
+      errorsByNodeId: new Map(),
+      descendantErrorCounts: new Map(),
+    }),
 
-  setValidation: (result) =>
-    set({ validation: result, errorsByNodeId: indexErrors(result.errors) }),
+  setValidation: (result) => {
+    const errorsByNodeId = indexErrors(result.errors);
+    const root = get().xmlDoc?.root;
+    set({
+      validation: result,
+      errorsByNodeId,
+      descendantErrorCounts: root
+        ? computeDescendantErrorCounts(root, errorsByNodeId)
+        : new Map(),
+    });
+  },
 
-  clearValidation: () => set({ validation: null, errorsByNodeId: new Map() }),
+  clearValidation: () =>
+    set({ validation: null, errorsByNodeId: new Map(), descendantErrorCounts: new Map() }),
 
   toggleExpanded: (id) => {
     const next = new Set(get().expandedIds);

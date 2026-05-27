@@ -10,6 +10,7 @@ export function XmlTreeView() {
   const searchQuery = useApp((s) => s.searchQuery);
   const selectedNodeId = useApp((s) => s.selectedNodeId);
   const errorsByNodeId = useApp((s) => s.errorsByNodeId);
+  const descendantErrorCounts = useApp((s) => s.descendantErrorCounts);
   const toggleExpanded = useApp((s) => s.toggleExpanded);
   const expandAll = useApp((s) => s.expandAll);
   const collapseAll = useApp((s) => s.collapseAll);
@@ -73,6 +74,7 @@ export function XmlTreeView() {
                 expanded={expandedIds.has(row.node.id)}
                 selected={selectedNodeId === row.node.id}
                 errorCount={errorsByNodeId.get(row.node.id)?.length ?? 0}
+                belowCount={descendantErrorCounts.get(row.node.id) ?? 0}
                 onToggle={() => toggleExpanded(row.node.id)}
                 onSelect={() => setSelected(row.node.id)}
               />
@@ -89,6 +91,7 @@ interface RowProps {
   expanded: boolean;
   selected: boolean;
   errorCount: number;
+  belowCount: number;
   onToggle: () => void;
   onSelect: () => void;
 }
@@ -98,11 +101,14 @@ function TreeRowView({
   expanded,
   selected,
   errorCount,
+  belowCount,
   onToggle,
   onSelect,
 }: RowProps) {
   const { node, depth, hasChildren } = row;
   const hasError = errorCount > 0;
+  // Only relevant when the node itself is error-free: a descendant has an error.
+  const hasErrorBelow = !hasError && belowCount > 0;
 
   return (
     <div
@@ -112,7 +118,9 @@ function TreeRowView({
           ? "bg-blue-50 dark:bg-blue-900/30 border-accent"
           : hasError
             ? "bg-red-50 dark:bg-red-900/20 border-red-400"
-            : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-900",
+            : hasErrorBelow
+              ? "bg-amber-50 dark:bg-amber-900/15 border-amber-400"
+              : "border-transparent hover:bg-slate-50 dark:hover:bg-slate-900",
       )}
       style={{ paddingLeft: `${depth * 14 + 6}px`, paddingRight: 8 }}
       role="treeitem"
@@ -169,6 +177,14 @@ function TreeRowView({
           title={`${errorCount} Validierungsfehler`}
         >
           ✕ {errorCount}
+        </span>
+      )}
+      {hasErrorBelow && (
+        <span
+          className="ml-1 chip bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+          title={`${belowCount} Fehler in untergeordneten Knoten`}
+        >
+          ⤵ {belowCount}
         </span>
       )}
     </div>

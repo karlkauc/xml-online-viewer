@@ -5,6 +5,8 @@ import { MAX_INLINE_ATTRS, NODE_WIDTH, type XmlNodeData } from "./buildGraph";
 export function XmlElementNode({ data }: { data: XmlNodeData }) {
   const attrs = data.attributes ?? [];
   const isElement = data.kind === "element";
+  // Node is error-free itself but an erroneous node hides in its subtree.
+  const hasErrorBelow = !data.hasError && data.descendantErrorCount > 0;
 
   return (
     <div
@@ -14,7 +16,9 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
           ? "border-accent ring-2 ring-accent/50"
           : data.hasError
             ? "border-red-400 ring-2 ring-red-400/40"
-            : "border-slate-300 dark:border-slate-700",
+            : hasErrorBelow
+              ? "border-amber-400 ring-2 ring-amber-400/40"
+              : "border-slate-300 dark:border-slate-700",
       )}
       style={{ width: NODE_WIDTH }}
     >
@@ -25,7 +29,9 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
           "flex items-center justify-between gap-1 px-2 py-1 border-b rounded-t-md",
           data.hasError
             ? "border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20"
-            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800",
+            : hasErrorBelow
+              ? "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20"
+              : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800",
         )}
       >
         <span
@@ -44,6 +50,14 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
             title={`${data.errorCount} Validierungsfehler`}
           >
             ✕ {data.errorCount}
+          </span>
+        )}
+        {hasErrorBelow && (
+          <span
+            className="shrink-0 chip bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+            title={`${data.descendantErrorCount} Fehler in untergeordneten Knoten`}
+          >
+            ⤵ {data.descendantErrorCount}
           </span>
         )}
       </div>
@@ -72,8 +86,19 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
       )}
 
       {data.expandable && (
-        <div className="px-2 py-0.5 text-[10px] text-accent border-t border-slate-200 dark:border-slate-800 text-right">
-          {data.expanded ? "Klick: zuklappen" : "Klick: aufklappen"}
+        <div
+          className={clsx(
+            "px-2 py-0.5 text-[10px] border-t border-slate-200 dark:border-slate-800 text-right",
+            hasErrorBelow && !data.expanded
+              ? "text-amber-700 dark:text-amber-300 font-medium"
+              : "text-accent",
+          )}
+        >
+          {hasErrorBelow && !data.expanded
+            ? `⤵ ${data.descendantErrorCount} Fehler — aufklappen`
+            : data.expanded
+              ? "Klick: zuklappen"
+              : "Klick: aufklappen"}
         </div>
       )}
       {data.expandable && <Handle type="source" position={Position.Right} />}

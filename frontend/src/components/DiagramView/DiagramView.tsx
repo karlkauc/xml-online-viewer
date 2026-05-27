@@ -68,6 +68,7 @@ function DiagramInner() {
   const selectedNodeId = useApp((s) => s.selectedNodeId);
   const expandedIds = useApp((s) => s.expandedIds);
   const errorsByNodeId = useApp((s) => s.errorsByNodeId);
+  const descendantErrorCounts = useApp((s) => s.descendantErrorCounts);
   const setSelected = useApp((s) => s.setSelected);
   const toggleExpanded = useApp((s) => s.toggleExpanded);
   const expandAll = useApp((s) => s.expandAll);
@@ -77,8 +78,14 @@ function DiagramInner() {
 
   const { nodes, edges } = useMemo<{ nodes: Node[]; edges: Edge[] }>(() => {
     if (!xmlDoc) return { nodes: [], edges: [] };
-    return buildDiagramGraph(xmlDoc.root, expandedIds, selectedNodeId, errorsByNodeId);
-  }, [xmlDoc, expandedIds, selectedNodeId, errorsByNodeId]);
+    return buildDiagramGraph(
+      xmlDoc.root,
+      expandedIds,
+      selectedNodeId,
+      errorsByNodeId,
+      descendantErrorCounts,
+    );
+  }, [xmlDoc, expandedIds, selectedNodeId, errorsByNodeId, descendantErrorCounts]);
 
   const flow = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
