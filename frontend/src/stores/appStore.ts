@@ -19,6 +19,22 @@ function collectExpandableIds(root: XmlNode): Set<string> {
   return ids;
 }
 
+/** Ids of all ancestors of `targetId` (root → parent), so selecting a node
+ * can reveal it by expanding the chain above it. Empty if not found. */
+function ancestorIds(root: XmlNode, targetId: string): string[] {
+  const path: string[] = [];
+  const walk = (node: XmlNode, trail: string[]): boolean => {
+    if (node.id === targetId) {
+      path.push(...trail);
+      return true;
+    }
+    const nextTrail = [...trail, node.id];
+    return node.children.some((c) => walk(c, nextTrail));
+  };
+  walk(root, []);
+  return path;
+}
+
 function indexErrors(
   errors: ValidationErrorItem[],
 ): Map<string, ValidationErrorItem[]> {
@@ -41,6 +57,8 @@ interface AppState {
   expandedIds: Set<string>;
   selectedNodeId: string | null;
   searchQuery: string;
+  viewMode: "tree" | "diagram";
+  minimapVisible: boolean;
 
   setXml: (doc: XmlDocModel) => void;
   setXsd: (info: XsdInfo) => void;
@@ -51,6 +69,8 @@ interface AppState {
   collapseAll: () => void;
   setSelected: (id: string | null) => void;
   setSearch: (q: string) => void;
+  setViewMode: (mode: "tree" | "diagram") => void;
+  setMinimapVisible: (visible: boolean) => void;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -62,15 +82,15 @@ export const useApp = create<AppState>((set, get) => ({
   expandedIds: new Set(),
   selectedNodeId: null,
   searchQuery: "",
+  viewMode: "diagram",
+  minimapVisible: false,
 
   setXml: (doc) =>
     set({
       xmlDoc: doc,
-      // Expand the first two levels by default for a useful initial view.
-      expandedIds: new Set([
-        doc.root.id,
-        ...doc.root.children.filter((c) => c.children.length).map((c) => c.id),
-      ]),
+      // Expand only the root, so the first level (root + direct children) is
+      // visible and everything below stays collapsed.
+      expandedIds: new Set([doc.root.id]),
       selectedNodeId: null,
       validation: null,
       errorsByNodeId: new Map(),
@@ -97,7 +117,25 @@ export const useApp = create<AppState>((set, get) => ({
 
   collapseAll: () => set({ expandedIds: new Set() }),
 
-  setSelected: (id) => set({ selectedNodeId: id }),
+  setSelected: (id) => {
+    if (!id) {
+      set({ selectedNodeId: null });
+      return;
+    }
+    // Reveal the node in both views by expanding its ancestor chain.
+    const doc = get().xmlDoc;
+    if (doc) {
+      const next = new Set(get().expandedIds);
+      for (const anc of ancestorIds(doc.root, id)) next.add(anc);
+      set({ selectedNodeId: id, expandedIds: next });
+    } else {
+      set({ selectedNodeId: id });
+    }
+  },
 
   setSearch: (q) => set({ searchQuery: q }),
+
+  setViewMode: (mode) => set({ viewMode: mode }),
+
+  setMinimapVisible: (visible) => set({ minimapVisible: visible }),
 }));

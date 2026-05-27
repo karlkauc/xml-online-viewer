@@ -43,3 +43,8 @@
     @apply inline-flex items-center px-1.5 py-0.5 rounded text-[0.7rem] font-medium uppercase tracking-wide;
   }
 }
+
+/* React Flow node typography */
+.react-flow__node {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}

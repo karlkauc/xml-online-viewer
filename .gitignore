@@ -17,3 +17,6 @@ frontend/dist/
 ._*
 .idea/
 .vscode/
+
+# Playwright MCP artifacts
+.playwright-mcp/

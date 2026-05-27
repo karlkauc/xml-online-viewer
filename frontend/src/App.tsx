@@ -8,8 +8,10 @@ import {
   uploadXsdUrl,
 } from "./api/client";
 import { useApp } from "./stores/appStore";
+import clsx from "clsx";
 import { Uploader } from "./components/Uploader";
 import { XmlTreeView } from "./components/XmlTreeView/XmlTreeView";
+import { DiagramView } from "./components/DiagramView/DiagramView";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 
@@ -18,6 +20,8 @@ export default function App() {
   const xsdInfo = useApp((s) => s.xsdInfo);
   const setXml = useApp((s) => s.setXml);
   const setXsd = useApp((s) => s.setXsd);
+  const viewMode = useApp((s) => s.viewMode);
+  const setViewMode = useApp((s) => s.setViewMode);
 
   const onXmlFile = useCallback(async (f: File) => setXml(await uploadXmlFile(f)), [setXml]);
   const onXmlText = useCallback(async (c: string) => setXml(await uploadXmlText(c)), [setXml]);
@@ -58,8 +62,29 @@ export default function App() {
           </div>
         ) : (
           <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_28rem] divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
-            <div className="min-h-0 h-full">
-              <XmlTreeView />
+            <div className="min-h-0 h-full flex flex-col">
+              <div className="flex gap-1 px-3 py-2 border-b border-slate-200 dark:border-slate-800" role="tablist">
+                {(["tree", "diagram"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === m}
+                    className={clsx(
+                      "px-3 py-1 text-sm font-medium rounded-md",
+                      viewMode === m
+                        ? "bg-accent text-white dark:bg-accent-dark dark:text-slate-950"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700",
+                    )}
+                    onClick={() => setViewMode(m)}
+                  >
+                    {m === "tree" ? "Baum" : "Diagramm"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 min-h-0">
+                {viewMode === "tree" ? <XmlTreeView /> : <DiagramView />}
+              </div>
             </div>
             <div className="min-h-0 h-full">
               <ValidationPanel />
