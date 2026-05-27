@@ -13,7 +13,7 @@ from app.api._common import read_upload, reject_oversized_text
 from app.cache import xml_cache
 from app.parser.security import SecurityError, fetch_url
 from app.parser.xml_tree import StoredXml, XmlDocModel, parse_xml
-from app.rate_limit import WRITE_LIMIT, limiter
+from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,8 @@ async def upload_xml_url(request: Request, payload: UrlPayload) -> XmlDocModel:
 
 
 @router.get("/xml/{xml_id}", response_model=XmlDocModel)
-async def get_xml(xml_id: str) -> XmlDocModel:
+@limiter.limit(READ_LIMIT)
+async def get_xml(request: Request, xml_id: str) -> XmlDocModel:
     stored = xml_cache.get(xml_id)
     if stored is None:
         raise HTTPException(status_code=404, detail="XML not found or expired")

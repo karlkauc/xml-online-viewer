@@ -16,7 +16,8 @@ from io import BytesIO
 from lxml import etree
 from pydantic import BaseModel, Field
 
-from app.parser.security import _reject_known_bombs, make_parser
+from app.config import settings
+from app.parser.security import SecurityError, _reject_known_bombs, make_parser
 
 # ---------------------------------------------------------------------------
 # Models (mirrored in frontend/src/types/model.ts)
@@ -108,6 +109,10 @@ def _build_node(
     line_to_id: dict[int, str],
     counter: list[int],
 ) -> XmlNode:
+    if counter[0] >= settings.max_xml_nodes:
+        raise SecurityError(
+            f"XML document exceeds the {settings.max_xml_nodes}-node limit"
+        )
     node_id = str(counter[0])
     counter[0] += 1
 

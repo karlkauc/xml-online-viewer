@@ -58,11 +58,12 @@ _BANNED_TOKENS = (b"<!DOCTYPE", b"<!ENTITY", b"<!ATTLIST", b"<!NOTATION")
 
 
 def _reject_known_bombs(data: bytes) -> None:
-    # Cheap pre-filter: any DTD markup is either unnecessary or a vector for a
-    # billion-laughs attack.
-    head = data[:4096].upper()
+    # Pre-filter the whole document: any DTD markup is either unnecessary or a
+    # vector for a billion-laughs attack. Scanning the entire buffer (not just
+    # the head) prevents bypass by placing the construct past an offset.
+    upper = data.upper()
     for token in _BANNED_TOKENS:
-        if token in head:
+        if token in upper:
             raise SecurityError(
                 f"DTD construct {token.decode()!r} is not permitted in uploads"
             )
@@ -111,7 +112,11 @@ def _resolve_all_addrs(host: str) -> list[str]:
     return list({info[4][0] for info in infos})
 
 
-def _verify_url(url: str) -> None:
+def _verify_url(url: str) -> tuple[str, str]:
+    """Validate ``url`` (scheme, host allowlist, no private IPs) and return
+    ``(host, pinned_ip)``. The pinned IP is one of the host's currently-resolved
+    public addresses; the caller connects to *that* IP so a later DNS rebinding
+    cannot redirect the request to a private address (TOCTOU)."""
     parsed = httpx.URL(url)
     if parsed.scheme not in ("http", "https"):
         raise SecurityError(f"only http(s) schemes are permitted; got {parsed.scheme!r}")
@@ -122,16 +127,37 @@ def _verify_url(url: str) -> None:
         raise SecurityError(
             f"host {host!r} is not on ALLOWED_SCHEMA_HOSTS lockdown whitelist"
         )
-    for addr in _resolve_all_addrs(host):
+    addrs = _resolve_all_addrs(host)
+    for addr in addrs:
         if _ip_is_private(addr):
             raise SecurityError(
                 f"host {host!r} resolves to a private/loopback address ({addr}); refusing to fetch"
             )
+    if not addrs:
+        raise SecurityError(f"host {host!r} did not resolve to any address")
+    return host, addrs[0]
+
+
+def _read_capped(response: httpx.Response) -> bytes:
+    """Read a streamed response body, aborting once the size cap is exceeded so
+    a malicious server cannot exhaust memory before the check."""
+    cap = settings.fetch_max_response_bytes
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > cap:
+            raise SecurityError(
+                f"response exceeds {settings.fetch_max_response_mb} MB cap"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def fetch_url(url: str) -> FetchedResource:
-    """Fetch a document by URL, enforcing all SSRF mitigations."""
-    _verify_url(url)
+    """Fetch a document by URL, enforcing all SSRF mitigations: scheme/host
+    checks, private-IP block, connection pinned to a validated IP (DNS-rebinding
+    safe), redirect cap with re-validation, and a streamed response-size cap."""
     remaining_redirects = settings.fetch_max_redirects
     current = url
     with httpx.Client(
@@ -140,37 +166,38 @@ def fetch_url(url: str) -> FetchedResource:
         limits=httpx.Limits(max_connections=4),
     ) as client:
         while True:
-            response = client.get(current)
-            if response.is_redirect:
-                if remaining_redirects <= 0:
-                    raise SecurityError("too many HTTP redirects")
-                remaining_redirects -= 1
-                target = response.headers.get("location")
-                if not target:
-                    raise SecurityError("redirect without Location header")
-                current = str(httpx.URL(current).join(target))
-                _verify_url(current)
-                continue
-            if response.status_code >= 400:
-                raise SecurityError(
-                    f"fetching {current!r} failed with HTTP {response.status_code}"
-                )
-            content = response.content
-            if len(content) > settings.fetch_max_response_bytes:
-                raise SecurityError(
-                    f"response from {current!r} exceeds "
-                    f"{settings.fetch_max_response_mb} MB cap"
-                )
+            host, pinned_ip = _verify_url(current)
+            parsed = httpx.URL(current)
+            # Connect to the pre-validated IP, but keep the original Host header
+            # and use the hostname for TLS SNI / certificate verification.
+            target = parsed.copy_with(host=pinned_ip)
+            with client.stream(
+                "GET",
+                target,
+                headers={"Host": parsed.netloc.decode("ascii")},
+                extensions={"sni_hostname": host},
+            ) as response:
+                if response.is_redirect:
+                    if remaining_redirects <= 0:
+                        raise SecurityError("too many HTTP redirects")
+                    remaining_redirects -= 1
+                    location = response.headers.get("location")
+                    if not location:
+                        raise SecurityError("redirect without Location header")
+                    current = str(httpx.URL(current).join(location))
+                    continue
+                if response.status_code >= 400:
+                    raise SecurityError(
+                        f"fetching {host!r} failed with HTTP {response.status_code}"
+                    )
+                content = _read_capped(response)
+                content_type = response.headers.get("content-type")
             logger.info(
                 "fetched remote resource",
                 extra={
-                    "ctx_url": current,
+                    "ctx_host": host,
                     "ctx_size_bytes": len(content),
-                    "ctx_content_type": response.headers.get("content-type"),
+                    "ctx_content_type": content_type,
                 },
             )
-            return FetchedResource(
-                url=current,
-                content=content,
-                content_type=response.headers.get("content-type"),
-            )
+            return FetchedResource(url=current, content=content, content_type=content_type)

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from app.cache import validation_cache, xml_cache, xsd_cache
 from app.parser.validate import ValidationResponse, validate
 from app.parser.xsd_store import XsdError
-from app.rate_limit import WRITE_LIMIT, limiter
+from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 from app.report.excel import build_report
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,8 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
 
 
 @router.get("/validate/{validation_id}/excel")
-async def download_excel(validation_id: str) -> StreamingResponse:
+@limiter.limit(READ_LIMIT)
+async def download_excel(request: Request, validation_id: str) -> StreamingResponse:
     stored = validation_cache.get(validation_id)
     if stored is None:
         raise HTTPException(status_code=404, detail="validation result not found or expired")

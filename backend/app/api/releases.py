@@ -14,6 +14,7 @@ response is served (stale-while-error) if available.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -24,7 +25,7 @@ from pydantic import BaseModel
 from app.api.xsd import XsdInfo, _finalize
 from app.parser.security import SecurityError, fetch_url
 from app.parser.xsd_store import XsdError, load_xsd_from_files
-from app.rate_limit import WRITE_LIMIT, limiter
+from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +103,37 @@ async def _fetch_github_releases() -> list[dict]:
         "User-Agent": "fundsxml-online-validator",
     }
     try:
-        async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
-            response = await client.get(
-                GITHUB_RELEASES_URL, headers=headers, params={"per_page": 100}
-            )
+        async with (
+            httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client,
+            client.stream(
+                "GET", GITHUB_RELEASES_URL, headers=headers, params={"per_page": 100}
+            ) as response,
+        ):
+            if response.status_code == 403:
+                body = (await response.aread())[:512].decode("utf-8", "replace")
+                if "rate limit" in body.lower():
+                    reset = response.headers.get("X-RateLimit-Reset")
+                    retry_after = response.headers.get("Retry-After") or reset or "60"
+                    raise HTTPException(
+                        status_code=503,
+                        detail="GitHub API rate limit exceeded; try again later",
+                        headers={"Retry-After": str(retry_after)},
+                    )
+            if response.status_code >= 500:
+                raise HTTPException(status_code=502, detail="GitHub API unavailable")
+            if response.status_code >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"GitHub API returned HTTP {response.status_code}",
+                )
+            # Read with a hard cap so a huge/hostile response can't OOM us.
+            content = b""
+            async for chunk in response.aiter_bytes():
+                content += chunk
+                if len(content) > _MAX_RESPONSE_BYTES:
+                    raise HTTPException(
+                        status_code=502, detail="GitHub API response too large"
+                    )
     except httpx.TimeoutException as exc:
         logger.warning("GitHub releases request timed out", extra={"ctx_error": str(exc)})
         raise HTTPException(status_code=504, detail="GitHub API request timed out") from exc
@@ -113,26 +141,8 @@ async def _fetch_github_releases() -> list[dict]:
         logger.warning("GitHub releases request failed", extra={"ctx_error": str(exc)})
         raise HTTPException(status_code=502, detail="GitHub API unreachable") from exc
 
-    if response.status_code == 403 and "rate limit" in response.text.lower():
-        reset = response.headers.get("X-RateLimit-Reset")
-        retry_after = response.headers.get("Retry-After") or reset or "60"
-        raise HTTPException(
-            status_code=503,
-            detail="GitHub API rate limit exceeded; try again later",
-            headers={"Retry-After": str(retry_after)},
-        )
-    if response.status_code >= 500:
-        raise HTTPException(status_code=502, detail="GitHub API unavailable")
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=502,
-            detail=f"GitHub API returned HTTP {response.status_code}",
-        )
-
-    if len(response.content) > _MAX_RESPONSE_BYTES:
-        raise HTTPException(status_code=502, detail="GitHub API response too large")
     try:
-        data = response.json()
+        data = json.loads(content)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="GitHub API returned invalid JSON") from exc
     if not isinstance(data, list):
@@ -145,8 +155,14 @@ class LoadReleasePayload(BaseModel):
 
 
 @router.get("/fundsxml/releases", response_model=FundsXmlReleasesResponse)
-async def list_fundsxml_releases() -> FundsXmlReleasesResponse:
+@limiter.limit(READ_LIMIT)
+async def list_fundsxml_releases(request: Request) -> FundsXmlReleasesResponse:
     """Return the cached list of FundsXML releases with XSD assets."""
+    return await _get_releases()
+
+
+async def _get_releases() -> FundsXmlReleasesResponse:
+    """Cached release listing (no request context, callable internally)."""
     global _cached_response, _cached_at_monotonic
 
     loop_now = asyncio.get_running_loop().time()
@@ -188,7 +204,7 @@ async def load_release_schema(request: Request, tag: str, payload: LoadReleasePa
     every XSD asset upfront and keying them by filename lets filename-based
     imports resolve.
     """
-    cached = await list_fundsxml_releases()
+    cached = await _get_releases()
     release = next((r for r in cached.releases if r.tag_name == tag), None)
     if release is None:
         raise HTTPException(status_code=404, detail=f"release {tag!r} not found")

@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 from lxml import etree
 
+from app.config import settings
 from app.parser.security import _reject_known_bombs, make_parser
 
 
@@ -145,10 +146,30 @@ def _files_from_zip(zip_bytes: bytes, main_filename: str | None) -> tuple[dict[s
     except zipfile.BadZipFile as exc:
         raise XsdError(f"not a valid ZIP archive: {exc}") from exc
 
+    entries = [info for info in archive.infolist() if not info.is_dir()]
+    if len(entries) > settings.max_zip_entries:
+        raise XsdError(
+            f"ZIP has too many entries ({len(entries)} > {settings.max_zip_entries})"
+        )
+
     files: dict[str, bytes] = {}
-    for info in archive.infolist():
-        if info.is_dir():
-            continue
+    total = 0
+    for info in entries:
+        # Reject symlink entries (unix mode S_IFLNK in the high 16 bits of
+        # external_attr) — they could point outside the materialisation dir.
+        if (info.external_attr >> 16) & 0o170000 == 0o120000:
+            raise XsdError(f"symlinks are not permitted in archives: {info.filename!r}")
+        # Zip-bomb guards, checked against the declared uncompressed size before
+        # decompressing the entry.
+        total += info.file_size
+        if total > settings.max_zip_uncompressed_bytes:
+            raise XsdError(
+                f"ZIP uncompressed size exceeds {settings.max_zip_uncompressed_mb} MB cap"
+            )
+        if info.compress_size > 0 and info.file_size / info.compress_size > settings.max_zip_ratio:
+            raise XsdError(
+                f"ZIP entry {info.filename!r} has a suspicious compression ratio"
+            )
         rel = str(_safe_relative_path(info.filename, info.filename))
         data = archive.read(info)
         _reject_known_bombs(data)
@@ -202,9 +223,15 @@ def build_xmlschema(stored: StoredXsd) -> etree.XMLSchema:
             xsd_tree = etree.parse(str(main_on_disk), make_parser())
             return etree.XMLSchema(xsd_tree)
         except etree.XMLSchemaParseError as exc:
-            raise XsdError(f"not a valid XSD schema: {exc}") from exc
+            raise XsdError(f"not a valid XSD schema: {_scrub(exc, tmp_root)}") from exc
         except etree.XMLSyntaxError as exc:
-            raise XsdError(f"schema could not be parsed: {exc}") from exc
+            raise XsdError(f"schema could not be parsed: {_scrub(exc, tmp_root)}") from exc
+
+
+def _scrub(exc: Exception, tmp_root: Path) -> str:
+    """Strip the internal temp-dir path from an lxml error message so it is not
+    leaked to clients (only the relative schema filename remains)."""
+    return str(exc).replace(str(tmp_root) + "/", "").replace(str(tmp_root), "")
 
 
 def load_xsd(

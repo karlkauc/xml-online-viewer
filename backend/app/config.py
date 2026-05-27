@@ -20,6 +20,10 @@ class Settings:
     fetch_max_response_mb: int
     fetch_max_redirects: int
     cors_allow_origins: tuple[str, ...]
+    max_zip_entries: int
+    max_zip_uncompressed_mb: int
+    max_zip_ratio: int
+    max_xml_nodes: int
 
     @property
     def max_upload_bytes(self) -> int:
@@ -28,6 +32,10 @@ class Settings:
     @property
     def fetch_max_response_bytes(self) -> int:
         return self.fetch_max_response_mb * 1024 * 1024
+
+    @property
+    def max_zip_uncompressed_bytes(self) -> int:
+        return self.max_zip_uncompressed_mb * 1024 * 1024
 
 
 def _parse_host_patterns(raw: str) -> tuple[re.Pattern[str], ...]:
@@ -63,6 +71,10 @@ def load_settings() -> Settings:
         fetch_max_response_mb=int(os.getenv("FETCH_MAX_RESPONSE_MB", "10")),
         fetch_max_redirects=int(os.getenv("FETCH_MAX_REDIRECTS", "3")),
         cors_allow_origins=_parse_origins(os.getenv("CORS_ALLOW_ORIGINS", "")),
+        max_zip_entries=int(os.getenv("MAX_ZIP_ENTRIES", "2000")),
+        max_zip_uncompressed_mb=int(os.getenv("MAX_ZIP_UNCOMPRESSED_MB", "200")),
+        max_zip_ratio=int(os.getenv("MAX_ZIP_RATIO", "200")),
+        max_xml_nodes=int(os.getenv("MAX_XML_NODES", "500000")),
     )
 
 

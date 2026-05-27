@@ -18,6 +18,8 @@ class JsonFormatter(logging.Formatter):
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created))
             + f".{int(record.msecs):03d}Z",
             "level": record.levelname,
+            # Cloud Logging reads the log level from "severity".
+            "severity": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
