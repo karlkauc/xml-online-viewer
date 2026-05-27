@@ -187,7 +187,7 @@ function DiagramInner() {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        alert(`${format.toUpperCase()}-Export fehlgeschlagen: ${msg}`);
+        alert(`${format.toUpperCase()} export failed: ${msg}`);
       }
     },
     [flow],
@@ -197,7 +197,7 @@ function DiagramInner() {
     <div ref={wrapperRef} className="relative h-full w-full">
       <div className="absolute top-2 right-2 z-10 flex gap-1">
         <button type="button" className="btn" onClick={expandAll} disabled={!xmlDoc}>
-          Alle auf
+          Expand all
         </button>
         <button
           type="button"
@@ -205,7 +205,7 @@ function DiagramInner() {
           onClick={collapseAll}
           disabled={expandedIds.size === 0}
         >
-          Alle zu
+          Collapse all
         </button>
         <button
           type="button"
@@ -213,7 +213,7 @@ function DiagramInner() {
           onClick={() => setMinimapVisible(!minimapVisible)}
           aria-pressed={minimapVisible}
         >
-          {minimapVisible ? "🗺️ Minimap aus" : "🗺️ Minimap"}
+          {minimapVisible ? "🗺️ Minimap off" : "🗺️ Minimap"}
         </button>
         <button type="button" className="btn" onClick={() => onExport("svg")}>
           SVG

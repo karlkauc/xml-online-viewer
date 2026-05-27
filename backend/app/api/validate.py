@@ -84,7 +84,7 @@ async def download_excel(validation_id: str) -> StreamingResponse:
         xsd_filename=stored.xsd_filename,
         reformatted_xml=stored.reformatted_xml,
     )
-    filename = f"validierungsreport_{validation_id[:8]}.xlsx"
+    filename = f"validation_report_{validation_id[:8]}.xlsx"
     return StreamingResponse(
         iter([data]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -19,7 +19,7 @@ export function ThemeToggle() {
       type="button"
       className="btn !px-2 !py-1"
       onClick={toggle}
-      title="Theme wechseln"
+      title="Toggle theme"
     >
       {theme === "dark" ? "☀" : "☾"}
     </button>

@@ -47,7 +47,7 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
         {data.hasError && (
           <span
             className="shrink-0 chip bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-            title={`${data.errorCount} Validierungsfehler`}
+            title={`${data.errorCount} validation error(s)`}
           >
             ✕ {data.errorCount}
           </span>
@@ -55,7 +55,7 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
         {hasErrorBelow && (
           <span
             className="shrink-0 chip bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-            title={`${data.descendantErrorCount} Fehler in untergeordneten Knoten`}
+            title={`${data.descendantErrorCount} error(s) in descendant nodes`}
           >
             ⤵ {data.descendantErrorCount}
           </span>
@@ -79,7 +79,7 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
           ))}
           {attrs.length > MAX_INLINE_ATTRS && (
             <li className="text-[10px] text-slate-500">
-              +{attrs.length - MAX_INLINE_ATTRS} weitere…
+              +{attrs.length - MAX_INLINE_ATTRS} more…
             </li>
           )}
         </ul>
@@ -95,10 +95,10 @@ export function XmlElementNode({ data }: { data: XmlNodeData }) {
           )}
         >
           {hasErrorBelow && !data.expanded
-            ? `⤵ ${data.descendantErrorCount} Fehler — aufklappen`
+            ? `⤵ ${data.descendantErrorCount} error(s) — expand`
             : data.expanded
-              ? "Klick: zuklappen"
-              : "Klick: aufklappen"}
+              ? "Click: collapse"
+              : "Click: expand"}
         </div>
       )}
       {data.expandable && <Handle type="source" position={Position.Right} />}

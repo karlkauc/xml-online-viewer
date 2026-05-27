@@ -6,8 +6,8 @@ import { FundsXmlReleases } from "./FundsXmlReleases";
 type Mode = "file" | "text" | "url" | "releases";
 
 const MODE_LABEL: Record<Mode, string> = {
-  file: "Datei",
-  text: "Einfügen",
+  file: "File",
+  text: "Paste",
   url: "URL",
   releases: "Releases",
 };
@@ -117,7 +117,7 @@ function SourceLoader({
             }}
           />
           <p className="mb-2 text-slate-600 dark:text-slate-400">
-            Datei hierher ziehen oder auswählen
+            Drop a file here or choose one
           </p>
           <button
             type="button"
@@ -125,15 +125,15 @@ function SourceLoader({
             disabled={busy}
             onClick={() => fileInput.current?.click()}
           >
-            Datei wählen…
+            Choose file…
           </button>
           {showMainFilename && (
             <label className="block mt-3 text-[11px] text-slate-500 dark:text-slate-400">
-              ZIP mit mehreren XSDs? Haupt-Schema wird automatisch erkannt —
-              oder hier angeben:
+              ZIP with multiple XSDs? The main schema is auto-detected — or
+              specify it here:
               <input
                 type="text"
-                placeholder="z.B. FundsXML4.xsd"
+                placeholder="e.g. FundsXML4.xsd"
                 className="mt-1 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
                 value={mainFilename}
                 onChange={(e) => setMainFilename(e.target.value)}
@@ -157,7 +157,7 @@ function SourceLoader({
             disabled={busy || !text.trim()}
             onClick={() => void run(() => onText(text))}
           >
-            Laden
+            Load
           </button>
         </div>
       )}
@@ -177,7 +177,7 @@ function SourceLoader({
             disabled={busy || !url.trim()}
             onClick={() => void run(() => onUrl(url.trim()))}
           >
-            Laden
+            Load
           </button>
         </div>
       )}
@@ -189,7 +189,7 @@ function SourceLoader({
         />
       )}
 
-      {busy && <p className="mt-2 text-xs text-slate-500">Lädt…</p>}
+      {busy && <p className="mt-2 text-xs text-slate-500">Loading…</p>}
       {error && (
         <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
           {error}
@@ -218,7 +218,7 @@ export function Uploader(props: UploaderProps) {
   return (
     <div className="flex flex-col md:flex-row gap-3">
       <SourceLoader
-        title="XML-Daten"
+        title="XML data"
         accept=".xml,application/xml,text/xml"
         placeholder="<FundsXML4>…"
         status={props.xmlStatus}
@@ -227,7 +227,7 @@ export function Uploader(props: UploaderProps) {
         onUrl={props.onXmlUrl}
       />
       <SourceLoader
-        title="XSD-Schema"
+        title="XSD schema"
         accept=".xsd,.zip,application/zip,application/xml"
         placeholder="<xs:schema>…"
         status={props.xsdStatus}

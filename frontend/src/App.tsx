@@ -44,7 +44,7 @@ export default function App() {
       <header className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800">
         <h1 className="text-base font-semibold">FundsXML Online Validator</h1>
         <p className="text-xs text-slate-500 hidden sm:block">
-          XML-Daten ansehen · gegen XSD validieren · Fehler als Excel exportieren
+          View XML data · validate against XSD · export errors to Excel
         </p>
         <div className="ml-auto">
           <ThemeToggle />
@@ -60,7 +60,7 @@ export default function App() {
         >
           <span className="text-slate-500 text-xs w-3">{filesOpen ? "▾" : "▸"}</span>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Dateien
+            Files
           </span>
           {!filesOpen && (
             <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
@@ -72,7 +72,7 @@ export default function App() {
         {filesOpen && (
           <div className="px-4 pb-4">
             <Uploader
-              xmlStatus={xmlDoc ? `${xmlDoc.filename} (${xmlDoc.node_count} Knoten)` : null}
+              xmlStatus={xmlDoc ? `${xmlDoc.filename} (${xmlDoc.node_count} nodes)` : null}
               xsdStatus={xsdInfo ? xsdInfo.main_filename : null}
               onXmlFile={onXmlFile}
               onXmlText={onXmlText}
@@ -89,7 +89,7 @@ export default function App() {
       <main className="flex-1 min-h-0">
         {!xmlDoc ? (
           <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-            Lade XML-Daten, um die Baumansicht zu sehen.
+            Load XML data to see the view.
           </div>
         ) : (
           <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_28rem] divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
@@ -109,7 +109,7 @@ export default function App() {
                     )}
                     onClick={() => setViewMode(m)}
                   >
-                    {m === "tree" ? "Baum" : "Diagramm"}
+                    {m === "tree" ? "Tree" : "Diagram"}
                   </button>
                 ))}
               </div>

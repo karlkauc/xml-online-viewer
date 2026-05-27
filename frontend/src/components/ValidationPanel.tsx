@@ -49,7 +49,7 @@ export function ValidationPanel() {
     <div className="flex flex-col h-full min-h-0">
       <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Validierung
+          Validation
         </span>
       </div>
 
@@ -60,7 +60,7 @@ export function ValidationPanel() {
           disabled={!canValidate || busy}
           onClick={() => void validate()}
         >
-          {busy ? "Validiere…" : "Validieren"}
+          {busy ? "Validating…" : "Validate"}
         </button>
 
         {validation && (
@@ -69,7 +69,7 @@ export function ValidationPanel() {
             href={excelReportUrl(validation.validation_id)}
             download
           >
-            ⬇ Excel-Report
+            ⬇ Excel report
           </a>
         )}
 
@@ -83,15 +83,15 @@ export function ValidationPanel() {
             )}
           >
             {validation.is_valid
-              ? "Gültig"
-              : `${validation.errors.length} Fehler`}
+              ? "Valid"
+              : `${validation.errors.length} errors`}
           </span>
         )}
       </div>
 
       {!canValidate && (
         <p className="p-3 text-sm text-slate-500">
-          Lade XML-Daten und ein XSD-Schema, um zu validieren.
+          Load XML data and an XSD schema to validate.
         </p>
       )}
       {error && (
@@ -104,7 +104,7 @@ export function ValidationPanel() {
         <div className="flex-1 min-h-0 overflow-auto">
           {validation.is_valid ? (
             <p className="p-3 text-sm text-emerald-600 dark:text-emerald-400">
-              ✓ Das Dokument ist gültig gegen das Schema.
+              ✓ The document is valid against the schema.
             </p>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -125,7 +125,7 @@ export function ValidationPanel() {
                     </span>
                     {err.line != null && (
                       <span className="font-mono text-xs text-slate-400">
-                        Zeile {err.line}
+                        Line {err.line}
                         {err.column ? `:${err.column}` : ""}
                       </span>
                     )}

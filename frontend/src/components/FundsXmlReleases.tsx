@@ -59,7 +59,7 @@ export function FundsXmlReleases({ onSelect, busy }: FundsXmlReleasesProps) {
     <div>
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-xs text-slate-600 dark:text-slate-400">
-          XSD-Schemas aus{" "}
+          XSD schemas from{" "}
           <a
             href="https://github.com/fundsxml/schema/releases"
             target="_blank"
@@ -68,7 +68,7 @@ export function FundsXmlReleases({ onSelect, busy }: FundsXmlReleasesProps) {
           >
             fundsxml/schema
           </a>{" "}
-          — Zeile anklicken zum Laden.
+          — click a row to load.
         </p>
         {state.kind === "ready" && (
           <button
@@ -77,28 +77,28 @@ export function FundsXmlReleases({ onSelect, busy }: FundsXmlReleasesProps) {
             onClick={() => void load()}
             disabled={busy}
           >
-            Aktualisieren
+            Refresh
           </button>
         )}
       </div>
 
       {state.kind === "loading" && (
-        <p className="text-xs text-slate-500 py-2">Releases werden geladen…</p>
+        <p className="text-xs text-slate-500 py-2">Loading releases…</p>
       )}
 
       {state.kind === "error" && (
         <div className="py-2">
           <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-            Releases konnten nicht geladen werden: {state.message}
+            Could not load releases: {state.message}
           </p>
           <button type="button" className="btn btn-primary mt-2" onClick={() => void load()}>
-            Erneut versuchen
+            Try again
           </button>
         </div>
       )}
 
       {state.kind === "ready" && state.releases.length === 0 && (
-        <p className="text-xs text-slate-500 py-2">Keine XSD-Releases gefunden.</p>
+        <p className="text-xs text-slate-500 py-2">No XSD releases found.</p>
       )}
 
       {state.kind === "ready" && state.releases.length > 0 && (
@@ -107,9 +107,9 @@ export function FundsXmlReleases({ onSelect, busy }: FundsXmlReleasesProps) {
             <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900">
               <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <th className="py-1 px-2 font-semibold">Version</th>
-                <th className="py-1 px-2 font-semibold">Datum</th>
-                <th className="py-1 px-2 font-semibold">Datei</th>
-                <th className="py-1 px-2 font-semibold text-right">Größe</th>
+                <th className="py-1 px-2 font-semibold">Date</th>
+                <th className="py-1 px-2 font-semibold">File</th>
+                <th className="py-1 px-2 font-semibold text-right">Size</th>
               </tr>
             </thead>
             <tbody>

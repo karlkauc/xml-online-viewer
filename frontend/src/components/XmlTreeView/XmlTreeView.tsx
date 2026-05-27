@@ -41,21 +41,21 @@ export function XmlTreeView() {
           {xmlDoc.filename}
         </span>
         <span className="font-mono text-[10px] text-slate-400">
-          {xmlDoc.node_count} Knoten · {rows.length} sichtbar
+          {xmlDoc.node_count} nodes · {rows.length} visible
         </span>
         <div className="ml-auto flex items-center gap-1">
           <button type="button" className="btn !px-2 !py-1" onClick={expandAll}>
-            Alle auf
+            Expand all
           </button>
           <button type="button" className="btn !px-2 !py-1" onClick={collapseAll}>
-            Alle zu
+            Collapse all
           </button>
         </div>
       </div>
       <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
         <input
           type="search"
-          placeholder="Suche Tag, Attribut oder Wert…"
+          placeholder="Search tag, attribute or value…"
           className="w-full text-sm px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
           value={searchQuery}
           onChange={(e) => setSearch(e.target.value)}
@@ -131,7 +131,7 @@ function TreeRowView({
       {hasChildren ? (
         <button
           type="button"
-          aria-label={expanded ? "Zuklappen" : "Aufklappen"}
+          aria-label={expanded ? "Collapse" : "Expand"}
           className="px-1 text-slate-500"
           onClick={(e) => {
             e.stopPropagation();
@@ -174,7 +174,7 @@ function TreeRowView({
       {hasError && (
         <span
           className="ml-1 chip bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-          title={`${errorCount} Validierungsfehler`}
+          title={`${errorCount} validation error(s)`}
         >
           ✕ {errorCount}
         </span>
@@ -182,7 +182,7 @@ function TreeRowView({
       {hasErrorBelow && (
         <span
           className="ml-1 chip bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-          title={`${belowCount} Fehler in untergeordneten Knoten`}
+          title={`${belowCount} error(s) in descendant nodes`}
         >
           ⤵ {belowCount}
         </span>
