@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -22,9 +24,9 @@ _HEADER_FILL = PatternFill("solid", fgColor="1F2937")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
 _META_FONT = Font(bold=True)
 _TITLE_FONT = Font(bold=True, size=14)
-# Highlight applied to the offending line's cell to make it stand out.
-_ERROR_LINE_FILL = PatternFill("solid", fgColor="FEF08A")
 _MONO_FONT = Font(name="Consolas")
+# Inline font for the offending line inside the context cell (bold red).
+_ERROR_LINE_INLINE = InlineFont(rFont="Consolas", b=True, color="B91C1C")
 
 _COLUMNS = [
     ("#", 6),
@@ -35,12 +37,24 @@ _COLUMNS = [
     ("Nachricht", 90),
     ("Typ", 28),
     ("Domain", 18),
-    ("Zeile davor", 52),
-    ("Fehlerzeile", 52),
-    ("Zeile danach", 52),
+    ("Kontext (Zeile davor / Fehlerzeile / danach)", 70),
 ]
-# 1-based column index of the highlighted "Fehlerzeile" column.
-_ERROR_LINE_COL = 10
+# 1-based column index of the context cell.
+_CONTEXT_COL = 9
+
+
+def _context_cell(prev: str | None, err: str | None, nxt: str | None) -> CellRichText | None:
+    """Build a single rich-text cell holding the line before, the error line
+    (bold red) and the line after, separated by newlines."""
+    if err is None:
+        return None
+    segments: list[object] = []
+    if prev is not None:
+        segments.append(prev + "\n")
+    segments.append(TextBlock(_ERROR_LINE_INLINE, err))
+    if nxt is not None:
+        segments.append("\n" + nxt)
+    return CellRichText(*segments)
 
 
 def _context_lines(lines: list[str], line: int | None) -> tuple[str | None, str | None, str | None]:
@@ -127,19 +141,15 @@ def build_report(
             err.message,
             err.type_name,
             err.domain,
-            prev_line,
-            err_line,
-            next_line,
+            _context_cell(prev_line, err_line, next_line),
         ]
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=r, column=col_idx, value=value)
             if col_idx in (5, 6):  # path, message wrap
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
-            elif col_idx >= 9:  # context lines: monospace, wrapped
+            elif col_idx == _CONTEXT_COL:  # context: monospace, wrapped lines
                 cell.font = _MONO_FONT
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
-                if col_idx == _ERROR_LINE_COL:
-                    cell.fill = _ERROR_LINE_FILL
 
     last_row = header_row + len(result.errors)
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
