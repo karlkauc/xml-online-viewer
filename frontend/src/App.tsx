@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   uploadXmlFile,
   uploadXmlText,
@@ -23,6 +23,7 @@ export default function App() {
   const setXsd = useApp((s) => s.setXsd);
   const viewMode = useApp((s) => s.viewMode);
   const setViewMode = useApp((s) => s.setViewMode);
+  const [filesOpen, setFilesOpen] = useState(true);
 
   const onXmlFile = useCallback(async (f: File) => setXml(await uploadXmlFile(f)), [setXml]);
   const onXmlText = useCallback(async (c: string) => setXml(await uploadXmlText(c)), [setXml]);
@@ -50,18 +51,39 @@ export default function App() {
         </div>
       </header>
 
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-        <Uploader
-          xmlStatus={xmlDoc ? `${xmlDoc.filename} (${xmlDoc.node_count} Knoten)` : null}
-          xsdStatus={xsdInfo ? xsdInfo.main_filename : null}
-          onXmlFile={onXmlFile}
-          onXmlText={onXmlText}
-          onXmlUrl={onXmlUrl}
-          onXsdFile={onXsdFile}
-          onXsdText={onXsdText}
-          onXsdUrl={onXsdUrl}
-          onXsdRelease={onXsdRelease}
-        />
+      <div className="border-b border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setFilesOpen((o) => !o)}
+          aria-expanded={filesOpen}
+          className="w-full flex items-center gap-2 px-4 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900"
+        >
+          <span className="text-slate-500 text-xs w-3">{filesOpen ? "▾" : "▸"}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Dateien
+          </span>
+          {!filesOpen && (
+            <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              XML: {xmlDoc ? xmlDoc.filename : "—"} · XSD:{" "}
+              {xsdInfo ? xsdInfo.main_filename : "—"}
+            </span>
+          )}
+        </button>
+        {filesOpen && (
+          <div className="px-4 pb-4">
+            <Uploader
+              xmlStatus={xmlDoc ? `${xmlDoc.filename} (${xmlDoc.node_count} Knoten)` : null}
+              xsdStatus={xsdInfo ? xsdInfo.main_filename : null}
+              onXmlFile={onXmlFile}
+              onXmlText={onXmlText}
+              onXmlUrl={onXmlUrl}
+              onXsdFile={onXsdFile}
+              onXsdText={onXsdText}
+              onXsdUrl={onXsdUrl}
+              onXsdRelease={onXsdRelease}
+            />
+          </div>
+        )}
       </div>
 
       <main className="flex-1 min-h-0">
