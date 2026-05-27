@@ -18,7 +18,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { useApp } from "../../stores/appStore";
-import { buildDiagramGraph } from "./buildGraph";
+import { buildDiagramGraph, NODE_WIDTH } from "./buildGraph";
 import { XmlElementNode } from "./XmlElementNode";
 import { exportFlowAsPng, exportFlowAsSvg } from "./exportImage";
 import { computeAnchoredViewport } from "./anchorViewport";
@@ -89,6 +89,11 @@ function DiagramInner() {
   const pendingAnchorRef = useRef<
     { nodeId: string; worldX: number; worldY: number } | null
   >(null);
+  // Selection ids that originated from a click *inside* the diagram — those
+  // keep their anchor and must NOT trigger the auto-centering below.
+  const internalSelectRef = useRef<string | null>(null);
+  // The id we have already centered on, so we center once per external select.
+  const centeredForRef = useRef<string | null>(null);
 
   // Only re-fit when the loaded document changes — re-fitting on every
   // expand/collapse would jitter the viewport and lose pan/zoom.
@@ -115,10 +120,39 @@ function DiagramInner() {
     flow.setViewport(next);
   }, [nodes, flow]);
 
+  // Center the viewport on a node selected from outside the diagram (a tree
+  // row or a validation error). Selections made by clicking a node in the
+  // diagram keep their anchored position and are skipped.
+  useEffect(() => {
+    if (!selectedNodeId) {
+      centeredForRef.current = null;
+      return;
+    }
+    if (selectedNodeId === internalSelectRef.current) {
+      centeredForRef.current = selectedNodeId;
+      internalSelectRef.current = null;
+      return;
+    }
+    if (centeredForRef.current === selectedNodeId) return;
+    if (!nodes.some((n) => n.id === selectedNodeId)) return; // not revealed yet
+    centeredForRef.current = selectedNodeId;
+    requestAnimationFrame(() => {
+      const node = flow.getNode(selectedNodeId);
+      if (!node) return;
+      const w = node.measured?.width ?? NODE_WIDTH;
+      const h = node.measured?.height ?? 64;
+      flow.setCenter(node.position.x + w / 2, node.position.y + h / 2, {
+        zoom: flow.getZoom(),
+        duration: 400,
+      });
+    });
+  }, [selectedNodeId, nodes, flow]);
+
   const onNodeClick = useCallback(
     (_e: unknown, node: Node) => {
       const data = node.data as { nodeId?: string; expandable?: boolean } | undefined;
       if (!data?.nodeId) return;
+      internalSelectRef.current = data.nodeId;
       setSelected(data.nodeId);
       if (data.expandable) {
         pendingAnchorRef.current = {
