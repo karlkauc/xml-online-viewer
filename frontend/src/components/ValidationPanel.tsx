@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { ApiError, excelReportUrl, runValidation } from "../api/client";
 import { useApp } from "../stores/appStore";
@@ -23,7 +23,7 @@ export function ValidationPanel() {
 
   const canValidate = !!xmlDoc && !!xsdInfo;
 
-  const validate = async () => {
+  const validate = useCallback(async () => {
     if (!xmlDoc || !xsdInfo) return;
     setError(null);
     setBusy(true);
@@ -35,7 +35,15 @@ export function ValidationPanel() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [xmlDoc, xsdInfo, setValidation]);
+
+  // Validate automatically whenever a new XML or XSD is loaded (both present).
+  // loadXml/loadXsd clear the previous result, so changing either id re-runs.
+  const xmlId = xmlDoc?.xml_id;
+  const xsdId = xsdInfo?.xsd_id;
+  useEffect(() => {
+    if (xmlId && xsdId) void validate();
+  }, [xmlId, xsdId, validate]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
