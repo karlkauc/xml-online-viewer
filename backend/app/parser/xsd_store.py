@@ -60,6 +60,45 @@ def _safe_relative_path(filename: str, fallback: str) -> PurePosixPath:
 # ---------------------------------------------------------------------------
 
 
+_REF_TAGS = {"include", "import", "redefine", "override"}
+
+
+def _referenced_paths(files: dict[str, bytes]) -> set[str]:
+    """Collect the set of file paths referenced via ``schemaLocation`` across
+    all schemas (xs:include/import/redefine/override), normalised to the same
+    relative-path scheme as the ZIP entries. Used to find the root schema:
+    the one no other schema points at."""
+    referenced: set[str] = set()
+    for name, data in files.items():
+        if not name.lower().endswith(".xsd"):
+            continue
+        try:
+            root = etree.fromstring(data, make_parser())
+        except etree.XMLSyntaxError:
+            continue
+        base = PurePosixPath(name).parent
+        for el in root.iter():
+            if not isinstance(el.tag, str) or etree.QName(el).localname not in _REF_TAGS:
+                continue
+            loc = el.get("schemaLocation")
+            if not loc or "://" in loc:
+                continue
+            # Resolve relative to the referencing file's directory, then
+            # normalise the same way ZIP entries are keyed.
+            resolved = str(_safe_relative_path(str(base / loc), loc))
+            referenced.add(resolved)
+            referenced.add(PurePosixPath(loc).name)  # also match by bare name
+    return referenced
+
+
+def _detect_root_xsd(files: dict[str, bytes], xsd_names: list[str]) -> str | None:
+    """Return the single XSD that no other schema references, or None if the
+    root is ambiguous (zero or several un-referenced schemas)."""
+    referenced = _referenced_paths(files)
+    roots = [n for n in xsd_names if n not in referenced and PurePosixPath(n).name not in referenced]
+    return roots[0] if len(roots) == 1 else None
+
+
 def _files_from_zip(zip_bytes: bytes, main_filename: str | None) -> tuple[dict[str, bytes], str]:
     try:
         archive = zipfile.ZipFile(io.BytesIO(zip_bytes))
@@ -86,6 +125,8 @@ def _files_from_zip(zip_bytes: bytes, main_filename: str | None) -> tuple[dict[s
             raise XsdError(f"main file {main_filename!r} not found in archive")
     elif len(xsd_names) == 1:
         main = xsd_names[0]
+    elif (detected := _detect_root_xsd(files, xsd_names)) is not None:
+        main = detected
     else:
         raise XsdError(
             "could not determine the main schema; specify main_filename "

@@ -9,9 +9,12 @@ interface SourceLoaderProps {
   accept: string;
   placeholder: string;
   status: string | null;
-  onFile: (file: File) => Promise<void>;
+  onFile: (file: File, mainFilename?: string) => Promise<void>;
   onText: (content: string) => Promise<void>;
   onUrl: (url: string) => Promise<void>;
+  // When set, a ZIP may contain several schemas; an optional input lets the
+  // user name the main file if it cannot be auto-detected.
+  showMainFilename?: boolean;
 }
 
 /** A single load surface (file / paste / URL) for either XML or XSD input. */
@@ -23,14 +26,18 @@ function SourceLoader({
   onFile,
   onText,
   onUrl,
+  showMainFilename,
 }: SourceLoaderProps) {
   const [mode, setMode] = useState<Mode>("file");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
+  const [mainFilename, setMainFilename] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
+
+  const main = () => mainFilename.trim() || undefined;
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setError(null);
@@ -84,7 +91,7 @@ function SourceLoader({
             e.preventDefault();
             setDragOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f) void run(() => onFile(f));
+            if (f) void run(() => onFile(f, main()));
           }}
         >
           <input
@@ -94,7 +101,7 @@ function SourceLoader({
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void run(() => onFile(f));
+              if (f) void run(() => onFile(f, main()));
             }}
           />
           <p className="mb-2 text-slate-600 dark:text-slate-400">
@@ -108,6 +115,19 @@ function SourceLoader({
           >
             Datei wählen…
           </button>
+          {showMainFilename && (
+            <label className="block mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+              ZIP mit mehreren XSDs? Haupt-Schema wird automatisch erkannt —
+              oder hier angeben:
+              <input
+                type="text"
+                placeholder="z.B. FundsXML4.xsd"
+                className="mt-1 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                value={mainFilename}
+                onChange={(e) => setMainFilename(e.target.value)}
+              />
+            </label>
+          )}
         </div>
       )}
 
@@ -169,7 +189,7 @@ interface UploaderProps {
   onXmlFile: (f: File) => Promise<void>;
   onXmlText: (c: string) => Promise<void>;
   onXmlUrl: (u: string) => Promise<void>;
-  onXsdFile: (f: File) => Promise<void>;
+  onXsdFile: (f: File, mainFilename?: string) => Promise<void>;
   onXsdText: (c: string) => Promise<void>;
   onXsdUrl: (u: string) => Promise<void>;
 }
@@ -194,6 +214,7 @@ export function Uploader(props: UploaderProps) {
         onFile={props.onXsdFile}
         onText={props.onXsdText}
         onUrl={props.onXsdUrl}
+        showMainFilename
       />
     </div>
   );

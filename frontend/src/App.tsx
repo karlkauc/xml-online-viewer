@@ -26,7 +26,10 @@ export default function App() {
   const onXmlFile = useCallback(async (f: File) => setXml(await uploadXmlFile(f)), [setXml]);
   const onXmlText = useCallback(async (c: string) => setXml(await uploadXmlText(c)), [setXml]);
   const onXmlUrl = useCallback(async (u: string) => setXml(await uploadXmlUrl(u)), [setXml]);
-  const onXsdFile = useCallback(async (f: File) => setXsd(await uploadXsdFile(f)), [setXsd]);
+  const onXsdFile = useCallback(
+    async (f: File, mainFilename?: string) => setXsd(await uploadXsdFile(f, mainFilename)),
+    [setXsd],
+  );
   const onXsdText = useCallback(async (c: string) => setXsd(await uploadXsdText(c)), [setXsd]);
   const onXsdUrl = useCallback(async (u: string) => setXsd(await uploadXsdUrl(u)), [setXsd]);
 
