@@ -9,7 +9,14 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from app import __version__
 from app.parser.validate import ValidationResponse
+
+# Application metadata shown in the report and stored in the workbook's
+# document properties.
+APP_NAME = "FundsXML Online Validator"
+APP_AUTHOR = "Karl Kauc"
+APP_URL = "https://xml-viewer.status20.net"
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F2937")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -39,13 +46,32 @@ def build_report(
     ws = wb.active
     ws.title = "Validierung"
 
-    ws["A1"] = "FundsXML Validierungsreport"
+    generated_at = datetime.now(timezone.utc)
+
+    # Workbook document properties (visible under File ▸ Info / Properties).
+    wb.properties.title = f"{APP_NAME} – Validierungsreport"
+    wb.properties.creator = APP_NAME
+    wb.properties.lastModifiedBy = APP_NAME
+    wb.properties.subject = f"Validierung {xml_filename} gegen {xsd_filename}"
+    wb.properties.description = (
+        f"Erzeugt von {APP_NAME} {__version__} ({APP_URL}); Autor {APP_AUTHOR}."
+    )
+    wb.properties.keywords = "FundsXML, XSD, Validierung"
+    wb.properties.created = generated_at
+    wb.properties.modified = generated_at
+
+    ws["A1"] = f"{APP_NAME} – Validierungsreport"
     ws["A1"].font = _TITLE_FONT
 
     meta = [
+        ("Applikation", APP_NAME),
+        ("Version", __version__),
+        ("Autor", APP_AUTHOR),
+        ("URL", APP_URL),
+        ("", ""),
         ("XML-Datei", xml_filename),
         ("XSD-Schema", xsd_filename),
-        ("Erstellt", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")),
+        ("Erstellt", generated_at.strftime("%Y-%m-%d %H:%M:%S UTC")),
         ("Ergebnis", "GÜLTIG" if result.is_valid else "UNGÜLTIG"),
         ("Anzahl Fehler", len(result.errors)),
     ]
@@ -85,6 +111,8 @@ def build_report(
     ws.auto_filter.ref = (
         f"A{header_row}:{get_column_letter(len(_COLUMNS))}{max(last_row, header_row)}"
     )
+    # Widen the first column so the metadata labels are readable.
+    ws.column_dimensions["A"].width = max(ws.column_dimensions["A"].width or 0, 16)
 
     buffer = BytesIO()
     wb.save(buffer)
