@@ -9,7 +9,7 @@ const MODE_LABEL: Record<Mode, string> = {
   file: "File",
   text: "Paste",
   url: "URL",
-  releases: "Releases",
+  releases: "FundsXML Releases",
 };
 
 interface SourceLoaderProps {
