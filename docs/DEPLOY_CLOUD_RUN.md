@@ -10,11 +10,11 @@ size caps); the items below are the platform-level controls to apply on top.
 ```bash
 PROJECT=your-project
 REGION=europe-west1
-IMAGE=$REGION-docker.pkg.dev/$PROJECT/apps/fundsxml-validator
+IMAGE=$REGION-docker.pkg.dev/$PROJECT/apps/xml-online-viewer
 
 gcloud builds submit --tag "$IMAGE"
 
-gcloud run deploy fundsxml-validator \
+gcloud run deploy xml-online-viewer \
   --image "$IMAGE" \
   --region "$REGION" \
   --allow-unauthenticated \

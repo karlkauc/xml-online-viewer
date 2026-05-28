@@ -100,7 +100,7 @@ async def _fetch_github_releases() -> list[dict]:
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "fundsxml-online-validator",
+        "User-Agent": "xml-online-viewer",
     }
     try:
         async with (

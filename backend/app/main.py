@@ -71,7 +71,7 @@ class BufferRequestBodyMiddleware:
 
 
 app = FastAPI(
-    title="FundsXML Online Validator",
+    title="XML Online Viewer",
     version=__version__,
     docs_url="/api/docs",
     redoc_url=None,

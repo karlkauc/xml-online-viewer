@@ -1,12 +1,13 @@
-# FundsXML Online Validator
+# XML Online Viewer
 
 A self-hostable web tool to view **XML data** and validate it against an
 **arbitrary XSD schema**. Validation errors can be downloaded as an
-**Excel report**.
+**Excel report**. Live at <https://www.xml-viewer.online>.
 
-Sibling project to the [Online XSD Viewer](../online_viewer); it shares that
-project's architecture (FastAPI + lxml backend, React/TypeScript/Vite/Tailwind
-frontend) and security-critical code (XXE, SSRF and XML-bomb protection).
+Sibling project to the [XSD Online Viewer](https://www.xsd-viewer.online); it
+shares that project's architecture (FastAPI + lxml backend, React/TypeScript/
+Vite/Tailwind frontend) and security-critical code (XXE, SSRF and XML-bomb
+protection).
 
 ## Features
 

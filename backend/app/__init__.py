@@ -1,3 +1,3 @@
-"""FundsXML Online Validator backend package."""
+"""XML Online Viewer backend package."""
 
 __version__ = "0.1.0"

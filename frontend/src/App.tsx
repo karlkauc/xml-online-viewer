@@ -42,7 +42,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800">
-        <h1 className="text-base font-semibold">FundsXML Online Validator</h1>
+        <h1 className="text-base font-semibold">XML Online Viewer</h1>
         <p className="text-xs text-slate-500 hidden sm:block">
           View XML data · validate against XSD · export errors to Excel
         </p>

@@ -1,7 +1,7 @@
 services:
-  fundsxml-validator:
+  xml-online-viewer:
     build: .
-    image: fundsxml-online-validator:latest
+    image: xml-online-viewer:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:8092:8080"

@@ -16,9 +16,9 @@ from app.parser.validate import ValidationResponse
 
 # Application metadata shown in the report and stored in the workbook's
 # document properties.
-APP_NAME = "FundsXML Online Validator"
+APP_NAME = "XML Online Viewer"
 APP_AUTHOR = "Karl Kauc"
-APP_URL = "https://xml-viewer.status20.net"
+APP_URL = "https://www.xml-viewer.online"
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F2937")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
