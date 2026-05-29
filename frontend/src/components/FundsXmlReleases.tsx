@@ -68,7 +68,16 @@ export function FundsXmlReleases({ onSelect, busy }: FundsXmlReleasesProps) {
           >
             fundsxml/schema
           </a>{" "}
-          — click a row to load.
+          — click a row to load. Learn more at{" "}
+          <a
+            href="https://fundsxml.org"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-accent hover:underline"
+          >
+            fundsxml.org
+          </a>
+          .
         </p>
         {state.kind === "ready" && (
           <button

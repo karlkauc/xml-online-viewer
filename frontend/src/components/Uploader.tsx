@@ -26,6 +26,8 @@ interface SourceLoaderProps {
   // When set, a "Releases" tab lets the user load a schema from a published
   // FundsXML GitHub release.
   onRelease?: (tagName: string, filename: string) => Promise<void>;
+  // Tab to open on first render (defaults to "file").
+  defaultMode?: Mode;
 }
 
 /** A single load surface (file / paste / URL) for either XML or XSD input. */
@@ -39,8 +41,9 @@ function SourceLoader({
   onUrl,
   showMainFilename,
   onRelease,
+  defaultMode = "file",
 }: SourceLoaderProps) {
-  const [mode, setMode] = useState<Mode>("file");
+  const [mode, setMode] = useState<Mode>(defaultMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -212,6 +215,8 @@ interface UploaderProps {
   onXsdText: (c: string) => Promise<void>;
   onXsdUrl: (u: string) => Promise<void>;
   onXsdRelease: (tagName: string, filename: string) => Promise<void>;
+  // Initial tab for the XSD loader (e.g. "releases" on the /fundsxml route).
+  defaultXsdMode?: Mode;
 }
 
 export function Uploader(props: UploaderProps) {
@@ -235,6 +240,7 @@ export function Uploader(props: UploaderProps) {
         onText={props.onXsdText}
         onUrl={props.onXsdUrl}
         onRelease={props.onXsdRelease}
+        defaultMode={props.defaultXsdMode}
         showMainFilename
       />
     </div>

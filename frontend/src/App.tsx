@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   uploadXmlFile,
   uploadXmlText,
@@ -7,6 +7,8 @@ import {
   uploadXsdText,
   uploadXsdUrl,
   loadXsdFromRelease,
+  listFundsXmlReleases,
+  type FundsXmlRelease,
 } from "./api/client";
 import { useApp } from "./stores/appStore";
 import clsx from "clsx";
@@ -15,6 +17,18 @@ import { XmlTreeView } from "./components/XmlTreeView/XmlTreeView";
 import { DiagramView } from "./components/DiagramView/DiagramView";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ThemeToggle } from "./components/ThemeToggle";
+
+// Stable landing route fundsxml.org can link to: opens the XSD loader on the
+// FundsXML Releases tab and auto-loads the newest release's schema.
+const isFundsXmlRoute = window.location.pathname.replace(/\/+$/, "") === "/fundsxml";
+
+/** Pick a release's main schema: the FundsXML* file, else the largest asset. */
+function pickMainAsset(release: FundsXmlRelease) {
+  return (
+    release.assets.find((a) => /^fundsxml/i.test(a.filename)) ??
+    release.assets.reduce((best, a) => (a.size > best.size ? a : best), release.assets[0])
+  );
+}
 
 export default function App() {
   const xmlDoc = useApp((s) => s.xmlDoc);
@@ -39,6 +53,25 @@ export default function App() {
     [setXsd],
   );
 
+  // On /fundsxml, auto-load the newest (stable) release's schema once. On
+  // failure the Releases tab is already open, so the user can pick manually.
+  const autoLoaded = useRef(false);
+  useEffect(() => {
+    if (!isFundsXmlRoute || autoLoaded.current || xsdInfo) return;
+    autoLoaded.current = true;
+    void (async () => {
+      try {
+        const { releases } = await listFundsXmlReleases();
+        const release = releases.find((r) => !r.prerelease) ?? releases[0];
+        if (!release || release.assets.length === 0) return;
+        const main = pickMainAsset(release);
+        setXsd(await loadXsdFromRelease(release.tag_name, main.filename));
+      } catch (err) {
+        console.error("Failed to auto-load latest FundsXML release", err);
+      }
+    })();
+  }, [xsdInfo, setXsd]);
+
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800">
@@ -46,7 +79,15 @@ export default function App() {
         <p className="text-xs text-slate-500 hidden sm:block">
           View XML data · validate against XSD · export errors to Excel
         </p>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <a
+            href="https://fundsxml.org"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-xs text-accent hover:underline"
+          >
+            fundsxml.org
+          </a>
           <ThemeToggle />
         </div>
       </header>
@@ -81,6 +122,7 @@ export default function App() {
               onXsdText={onXsdText}
               onXsdUrl={onXsdUrl}
               onXsdRelease={onXsdRelease}
+              defaultXsdMode={isFundsXmlRoute ? "releases" : "file"}
             />
           </div>
         )}
