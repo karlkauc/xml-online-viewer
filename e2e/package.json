@@ -1,0 +1,8 @@
+{
+  "name": "xml-online-viewer-e2e",
+  "private": true,
+  "description": "Playwright install used only by scripts/record_demo.mjs to record the README demo GIFs.",
+  "devDependencies": {
+    "playwright": "^1.59.0"
+  }
+}

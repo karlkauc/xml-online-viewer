@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<library name="City Library" city="Berlin">
+  <section id="fiction">
+    <book isbn="111" year="1999">
+      <title>The First Book</title>
+      <author>Alice Author</author>
+    </book>
+    <book isbn="222" year="2010">
+      <title>Second Story</title>
+      <author>Bob Writer</author>
+    </book>
+  </section>
+  <section id="science">
+    <book isbn="333" year="2020">
+      <title>Physics Today</title>
+      <author>Carol Scientist</author>
+    </book>
+  </section>
+</library>

@@ -20,3 +20,7 @@ frontend/dist/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Demo-recording intermediates (the final docs/media/*.gif is committed)
+docs/media/_raw/
+e2e/test-results/
