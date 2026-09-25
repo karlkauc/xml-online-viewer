@@ -34,7 +34,7 @@ import {
   XSD_VIEWER_URL,
   openAbout,
   openFeedback,
-  openSearch, FREEXMLTOOLKIT_GO } from "./lib/links";
+  openSearch, FREEXMLTOOLKIT_GO, SPONSOR_GO } from "./lib/links";
 
 // Stable landing route fundsxml.org can link to: opens the XSD loader on the
 // FundsXML Releases tab and auto-loads the newest release's schema.
@@ -249,6 +249,14 @@ export default function App() {
         title: "FreeXmlToolkit — free desktop XML workstation by the same author (Windows, macOS, Linux)",
         ariaLabel: "FreeXmlToolkit desktop app",
         href: FREEXMLTOOLKIT_GO,
+        external: true,
+      },
+      {
+        key: "sponsor",
+        label: "♥ Support ↗",
+        title: "Support the XML Viewer on GitHub Sponsors",
+        ariaLabel: "Support this project on GitHub Sponsors",
+        href: SPONSOR_GO,
         external: true,
       },
       { key: "github", label: "GitHub", title: "Source code on GitHub", ariaLabel: "Source code on GitHub", href: GITHUB_REPO_URL, external: true },

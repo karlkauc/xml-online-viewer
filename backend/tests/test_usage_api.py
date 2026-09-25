@@ -162,3 +162,10 @@ def test_lifespan_with_disabled_settings() -> None:
     with TestClient(app) as c:
         assert c.app.state.usage.enabled is False
         assert c.get("/api/health").status_code == 200
+
+
+def test_sponsor_click_is_recorded_as_page_view(client: TestClient, recorder: ListRecorder) -> None:
+    r = client.get("/go/sponsor", follow_redirects=False)
+    assert r.status_code == 302
+    (ev,) = recorder.events
+    assert (ev.event_type, ev.path, ev.source, ev.status_code) == ("page_view", "/go/sponsor", "sponsor", 302)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchHealth } from "../api/client";
-import { EVENT_OPEN_ABOUT, FUNDSXML_URL, GITHUB_REPO_URL, XSD_VIEWER_URL, openFeedback, FREEXMLTOOLKIT_GO } from "../lib/links";
+import { EVENT_OPEN_ABOUT, FUNDSXML_URL, GITHUB_REPO_URL, XSD_VIEWER_URL, openFeedback, FREEXMLTOOLKIT_GO, SPONSOR_GO } from "../lib/links";
 
 /**
  * Modal "About" dialog. Opened from anywhere via `openAbout()` (lib/links) —
@@ -118,6 +118,12 @@ export function AboutDialog() {
               FreeXmlToolkit
             </a>
             {" — free desktop XML workstation by the same author: schema-aware editor, XSLT, Schematron, signatures"}
+          </li>
+          <li>
+            <a className={linkClass} href={SPONSOR_GO} target="_blank" rel="noopener noreferrer">
+              Support this project
+            </a>
+            {" — free, no ads, no tracking; GitHub Sponsors helps cover hosting"}
           </li>
           <li>
             <a className={linkClass} href={`${GITHUB_REPO_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">
