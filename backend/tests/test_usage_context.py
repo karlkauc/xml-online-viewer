@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from app import __version__
 from app.usage.context import RequestUsage, UsageTracker, bind, emit, unbind
 from app.usage.events import UsageEvent
 from app.usage.recorder import UsageRecorder
@@ -35,6 +38,17 @@ def test_emit_builds_event() -> None:
     assert ev.device == "bot" and ev.referrer == "https://a.example/x"
     assert ev.country_code is None and ev.app_version
     assert len(ev.error_detail) == 255
+
+
+def test_emit_records_the_cloud_run_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("K_REVISION", "xml-online-viewer-00046-abc")
+    rec = ListRecorder()
+    token = bind(RequestUsage(UsageTracker(rec, geoip=None, hash_secret="s"), "1.2.3.4", None, None))
+    try:
+        assert emit("page_view", path="/")
+    finally:
+        unbind(token)
+    assert rec.events[0].app_version == f"{__version__}+xml-online-viewer-00046-abc"
 
 
 def test_emit_disabled_tracker() -> None:

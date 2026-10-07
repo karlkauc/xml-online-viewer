@@ -53,9 +53,13 @@ SECRETS='USAGE_DB_PASSWORD=xmlviewer-feedback-db-password:latest'
 SECRETS+=',USAGE_HASH_SECRET=xmlviewer-usage-hash-secret:latest'
 SECRETS+=',MAXMIND_LICENSE_KEY=xmlviewer-maxmind-license-key:latest'
 
+# --session-affinity: documents and schemas live in a per-instance cache, so a
+# visitor's validate call should reach the instance that parsed their upload
+# (best effort; the frontend reloads the source when it does not).
 echo ">> deploying $SERVICE to $PROJECT/$REGION"
 gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" \
   --allow-unauthenticated --ingress all \
   --memory 1Gi --cpu 1 --concurrency 20 --max-instances 5 --timeout 120 \
+  --session-affinity \
   --set-env-vars "$ENV_VARS" \
   --update-secrets "$SECRETS"

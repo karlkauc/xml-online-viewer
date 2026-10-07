@@ -107,9 +107,10 @@ def test_unknown_ids_404(client: TestClient) -> None:
 
 
 def test_dtd_rejected(client: TestClient) -> None:
-    bomb = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><x/>'
+    bomb = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b"><!ENTITY c "&a;&a;">]><x>&c;</x>'
     r = client.post("/api/xml/text", json={"content": bomb, "filename": "x.xml"})
     assert r.status_code == 400
+    assert "DTD constructs are not allowed" in r.json()["detail"]
 
 
 # --- Feedback ---------------------------------------------------------------

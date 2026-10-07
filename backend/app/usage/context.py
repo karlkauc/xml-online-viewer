@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from app import __version__
+from app import release_version
 from app.usage.events import (
     UsageEvent,
     classify_device,
@@ -91,7 +91,7 @@ def emit(event_type: str, **fields: Any) -> bool:
             country_code=tracker.geoip.country(ctx.ip) if tracker.geoip else None,
             user_agent=truncate(ctx.user_agent),
             device=classify_device(ctx.user_agent),
-            app_version=__version__,
+            app_version=release_version(),
             referrer=clean_referrer(ctx.referrer),
             **fields,
         )

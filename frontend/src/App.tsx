@@ -5,7 +5,7 @@ import {
   uploadXmlFile,
   uploadXmlText,
   uploadXmlUrl,
-  uploadXsdFile,
+  uploadXsdFiles,
   uploadXsdText,
   uploadXsdUrl,
   loadXsdFromRelease,
@@ -168,8 +168,8 @@ export default function App() {
     },
     [setXsd],
   );
-  const onXsdFile = useCallback(
-    async (f: File, mainFilename?: string) => applyXsd(await uploadXsdFile(f, mainFilename)),
+  const onXsdFiles = useCallback(
+    async (files: File[], mainFilename?: string) => applyXsd(await uploadXsdFiles(files, mainFilename)),
     [applyXsd],
   );
   const onXsdText = useCallback(async (c: string) => applyXsd(await uploadXsdText(c)), [applyXsd]);
@@ -215,7 +215,7 @@ export default function App() {
           await applyXml(doc);
           if (schema) {
             setHandoff({ status: "loading", detail: schema.file.name });
-            applyXsd(await uploadXsdFile(schema.file, schema.mainFilename));
+            applyXsd(await uploadXsdFiles([schema.file], schema.mainFilename));
             setValidationOpen(true);
           }
           setHandoff(null);
@@ -333,7 +333,7 @@ export default function App() {
               onXmlText={onXmlText}
               onXmlUrl={onXmlUrl}
               onXmlSample={onXmlSample}
-              onXsdFile={onXsdFile}
+              onXsdFiles={onXsdFiles}
               onXsdText={onXsdText}
               onXsdUrl={onXsdUrl}
               onXsdRelease={onXsdRelease}
@@ -350,11 +350,18 @@ export default function App() {
                 ) : null
               }
             />
+          </div>
+        )}
+        {/* Outside the collapsible part: on phones Files closes as soon as a
+            document loads, and these notes are about that very document. */}
+        {(autoSchema || (xmlDoc && xmlDoc.notices.length > 0)) && (
+          <div className="px-3 md:px-4 pb-2 space-y-1 text-xs text-amber-700 dark:text-amber-400" role="status">
+            {xmlDoc?.notices.map((notice) => <p key={notice}>{notice}</p>)}
             {autoSchema && (
-              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400" role="status">
+              <p>
                 {autoSchema.kind === "local"
-                  ? `This document references ${autoSchema.detail}. Load that schema on the right to validate it.`
-                  : `The schema referenced by this document could not be loaded (${autoSchema.detail}). Load it manually on the right.`}
+                  ? `This document references ${autoSchema.detail}. Load that schema in the XSD panel to validate it.`
+                  : `The schema referenced by this document could not be loaded (${autoSchema.detail}). Load it manually in the XSD panel.`}
               </p>
             )}
           </div>

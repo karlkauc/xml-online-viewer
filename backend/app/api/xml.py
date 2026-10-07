@@ -7,13 +7,13 @@ import logging
 import time
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
-from lxml import etree
 from pydantic import BaseModel, Field
 
 from app.api._common import _ms, read_upload, reject, reject_oversized_text
 from app.cache import xml_cache
+from app.parser.errors import utf8_bytes
 from app.parser.security import SecurityError, fetch_url
-from app.parser.xml_tree import StoredXml, XmlDocModel, parse_xml
+from app.parser.xml_tree import StoredXml, XmlDocModel, XmlError, parse_xml
 from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 from app.usage.context import emit
 from app.usage.events import schema_display_name
@@ -54,8 +54,8 @@ def _parse(data: bytes, filename: str, *, source: str, base_url: str | None = No
     name = schema_display_name(source, filename)
     try:
         stored = parse_xml(data, filename, base_url=base_url)
-    except (etree.XMLSyntaxError, SecurityError) as exc:
-        detail = f"XML is not well-formed: {exc}" if isinstance(exc, etree.XMLSyntaxError) else str(exc)
+    except (XmlError, SecurityError) as exc:
+        detail = str(exc)
         emit(
             "xml_load",
             source=source,
@@ -92,7 +92,7 @@ async def upload_xml(request: Request, file: UploadFile) -> XmlDocModel:
 @router.post("/xml/text", response_model=XmlDocModel)
 @limiter.limit(WRITE_LIMIT)
 async def upload_xml_text(request: Request, payload: TextPayload) -> XmlDocModel:
-    data = payload.content.encode("utf-8")
+    data = utf8_bytes(payload.content)
     reject_oversized_text(data, event_type="xml_load", filename=payload.filename)
     return _parse(data, payload.filename, source="text")
 

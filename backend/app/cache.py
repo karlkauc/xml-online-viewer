@@ -42,6 +42,8 @@ class TtlCache(Generic[T]):
             if entry.expires_at <= now:
                 self._store.pop(key, None)
                 return None
+            # Sliding expiry: a document someone is still working with stays.
+            entry.expires_at = now + self._ttl_seconds
             self._store.move_to_end(key)
             return entry.value
 

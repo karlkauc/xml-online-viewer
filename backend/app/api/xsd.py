@@ -14,9 +14,17 @@ from pydantic import BaseModel, Field
 
 from app.api._common import _ms, read_upload, reject, reject_oversized_text
 from app.cache import xml_cache, xsd_cache
+from app.config import settings
+from app.parser.errors import utf8_bytes
 from app.parser.schema_fetch import fetch_schema_set
 from app.parser.security import SecurityError, fetch_url
-from app.parser.xsd_store import StoredXsd, XsdError, load_xsd, load_xsd_from_files
+from app.parser.xsd_store import (
+    AmbiguousMainError,
+    StoredXsd,
+    XsdError,
+    load_xsd,
+    load_xsd_from_files,
+)
 from app.rate_limit import WRITE_LIMIT, limiter
 from app.usage.context import emit
 from app.usage.events import schema_display_name
@@ -33,6 +41,15 @@ class TextPayload(BaseModel):
 
 class UrlPayload(BaseModel):
     url: str = Field(..., description="Absolute http(s) URL of the XSD")
+
+
+class MainSchemaChoice(HTTPException):
+    """422 that also lists the schemas to choose the main one from; rendered
+    by the handler in ``main.py`` as ``{"detail": …, "candidates": […]}``."""
+
+    def __init__(self, detail: str, candidates: list[str]) -> None:
+        super().__init__(status_code=422, detail=detail)
+        self.candidates = candidates
 
 
 class XsdInfo(BaseModel):
@@ -84,6 +101,8 @@ def ingest_xsd(
             status_code=status_code,
             error_detail=str(exc),
         )
+        if isinstance(exc, AmbiguousMainError):
+            raise MainSchemaChoice(str(exc), exc.candidates) from exc
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     info = _finalize(stored)
     emit(
@@ -106,12 +125,19 @@ def _load(
     zip_bytes: bytes | None,
     main_filename: str | None,
     main_bytes: bytes | None,
+    files: dict[str, bytes] | None = None,
 ) -> XsdInfo:
+    if files is not None:
+        input_bytes = sum(len(data) for data in files.values())
+    else:
+        input_bytes = len(zip_bytes if zip_bytes is not None else (main_bytes or b""))
     return ingest_xsd(
         source=source,
         schema_name=schema_name,
-        input_bytes=len(zip_bytes if zip_bytes is not None else (main_bytes or b"")),
-        loader=lambda: load_xsd(zip_bytes=zip_bytes, main_filename=main_filename, main_bytes=main_bytes),
+        input_bytes=input_bytes,
+        loader=lambda: load_xsd(
+            zip_bytes=zip_bytes, main_filename=main_filename, main_bytes=main_bytes, files=files
+        ),
     )
 
 
@@ -119,9 +145,14 @@ def _load(
 @limiter.limit(WRITE_LIMIT)
 async def upload_xsd(
     request: Request,
-    file: UploadFile,
+    file: list[UploadFile],
     main_filename: Annotated[str | None, Form()] = None,
 ) -> XsdInfo:
+    """One schema, one ZIP, or a schema together with the files it imports
+    (repeat the ``file`` field)."""
+    if len(file) > 1:
+        return await _upload_loose_files(file, main_filename)
+    file = file[0]
     content = await read_upload(file, event_type="xsd_load")
     name = file.filename or "schema.xsd"
     is_zip = name.lower().endswith(".zip") or (file.content_type or "").endswith("zip")
@@ -136,10 +167,38 @@ async def upload_xsd(
     return _load(source="upload", schema_name=name, zip_bytes=None, main_filename=name, main_bytes=content)
 
 
+async def _upload_loose_files(uploads: list[UploadFile], main_filename: str | None) -> XsdInfo:
+    name = schema_display_name("upload", main_filename or uploads[0].filename)
+
+    def refuse(status_code: int, detail: str) -> HTTPException:
+        return reject("xsd_load", "upload", status_code, detail, schema_name=name)
+
+    if len(uploads) > settings.max_zip_entries:
+        raise refuse(413, f"too many files ({len(uploads)} > {settings.max_zip_entries})")
+    files: dict[str, bytes] = {}
+    total = 0
+    for upload in uploads:
+        data = await read_upload(upload, event_type="xsd_load")
+        total += len(data)
+        if total > settings.max_upload_bytes:
+            raise refuse(413, f"upload exceeds {settings.max_upload_mb} MB limit")
+        files[upload.filename or f"schema-{len(files) + 1}.xsd"] = data
+    if any(filename.lower().endswith(".zip") for filename in files):
+        raise refuse(400, "upload either one ZIP archive or the schema files themselves, not both")
+    return _load(
+        source="upload",
+        schema_name=main_filename or uploads[0].filename,
+        zip_bytes=None,
+        main_filename=main_filename,
+        main_bytes=None,
+        files=files,
+    )
+
+
 @router.post("/xsd/text", response_model=XsdInfo)
 @limiter.limit(WRITE_LIMIT)
 async def upload_xsd_text(request: Request, payload: TextPayload) -> XsdInfo:
-    data = payload.content.encode("utf-8")
+    data = utf8_bytes(payload.content)
     reject_oversized_text(data, event_type="xsd_load", filename=payload.filename)
     return _load(
         source="text",

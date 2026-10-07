@@ -38,6 +38,8 @@ export interface XmlDocModel {
   node_count: number;
   source_url: string | null;
   schema_hints: SchemaHint[];
+  /** Repairs the server made to the input before parsing it. */
+  notices: string[];
 }
 
 export interface XsdInfo {

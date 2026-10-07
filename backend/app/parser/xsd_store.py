@@ -9,6 +9,7 @@ directory at validation time, preserving the relative paths that
 from __future__ import annotations
 
 import io
+import posixpath
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -16,12 +17,25 @@ from pathlib import Path, PurePosixPath
 from lxml import etree
 
 from app.config import settings
-from app.parser.security import _reject_known_bombs, make_parser
+from app.parser.errors import humanize_syntax_error, syntax_message
+from app.parser.security import inspect_dtd, make_parser
 
 
 class XsdError(ValueError):
     """The submitted schema cannot be used: missing main file, unsafe path,
     or it does not compile as an XSD. Surfaced as HTTP 400/422 by the API."""
+
+
+class AmbiguousMainError(XsdError):
+    """Several schemas were submitted and none stands out as the main one;
+    ``candidates`` lets the client offer the choice."""
+
+    def __init__(self, candidates: list[str]) -> None:
+        self.candidates = candidates
+        super().__init__(
+            f"could not tell which of the {len(candidates)} schemas is the main one — choose "
+            f"it and load again (API: main_filename); candidates: {', '.join(candidates)}"
+        )
 
 
 @dataclass
@@ -62,6 +76,10 @@ def _safe_relative_path(filename: str, fallback: str) -> PurePosixPath:
 
 
 _REF_TAGS = {"include", "import", "redefine", "override"}
+XSD_NS = "http://www.w3.org/2001/XMLSchema"
+XSLT_NS = "http://www.w3.org/1999/XSL/Transform"
+# Listing every missing file helps nobody; the first few say what kind is missing.
+_MAX_LISTED_FILES = 5
 
 # Well-known schemas bundled with the app so multi-file schemas that reference
 # them (e.g. FundsXML importing xmldsig-core-schema.xsd) compile even when the
@@ -137,6 +155,41 @@ def _referenced_paths(files: dict[str, bytes]) -> set[str]:
     return referenced
 
 
+def _missing_references(files: dict[str, bytes]) -> list[str]:
+    """``schemaLocation`` targets that no file of the set satisfies, as the
+    schemas wrote them. An absolute URL always counts: the compiler runs with
+    ``no_network=True`` and never fetches it."""
+    missing: dict[str, None] = {}
+    for name, data in files.items():
+        if not name.lower().endswith(".xsd"):
+            continue
+        base = posixpath.dirname(name)
+        for loc in _iter_schema_locations(data, include_remote=True):
+            target = posixpath.normpath(posixpath.join(base, loc.replace("\\", "/")))
+            if "://" in loc or target not in files:
+                missing[loc] = None
+    return list(missing)
+
+
+def _not_a_schema_message(root: etree._Element) -> str:
+    """Explain a well-formed file in the XSD field whose root is not ``xs:schema``."""
+    qname = etree.QName(root)
+    if qname.namespace == XSLT_NS:
+        what = "an XSLT stylesheet"
+    elif qname.localname == "schema":
+        what = (
+            f"a schema in the namespace {qname.namespace!r}, not XML Schema ({XSD_NS})"
+            if qname.namespace
+            else f"a <schema> without the XML Schema namespace ({XSD_NS})"
+        )
+    else:
+        what = f"an XML document (root element <{qname.localname}>)"
+    return (
+        f"not an XSD schema: this is {what}. The XSD field takes the schema a document is "
+        "validated against; a document to view belongs in the XML field"
+    )
+
+
 def _detect_root_xsd(files: dict[str, bytes], xsd_names: list[str]) -> str | None:
     """Return the single XSD that no other schema references, or None if the
     root is ambiguous (zero or several un-referenced schemas)."""
@@ -177,28 +230,34 @@ def _files_from_zip(zip_bytes: bytes, main_filename: str | None) -> tuple[dict[s
             )
         rel = str(_safe_relative_path(info.filename, info.filename))
         data = archive.read(info)
-        _reject_known_bombs(data)
+        inspect_dtd(data)
         files[rel] = data
 
-    xsd_names = [name for name in files if name.lower().endswith(".xsd")]
     if not files:
         raise XsdError("ZIP archive is empty")
+    return files, _pick_main(files, main_filename, "the ZIP archive")
 
+
+def _pick_main(files: dict[str, bytes], main_filename: str | None, where: str) -> str:
+    """The main schema of a multi-file set: the one named, the only one, or the
+    single schema nothing else references."""
+    xsd_names = [name for name in files if name.lower().endswith(".xsd")]
     if main_filename:
         wanted = str(_safe_relative_path(main_filename, main_filename))
         main = next((n for n in files if n == wanted or n.endswith("/" + wanted)), None)
         if main is None:
-            raise XsdError(f"main file {main_filename!r} not found in archive")
-    elif len(xsd_names) == 1:
-        main = xsd_names[0]
-    elif (detected := _detect_root_xsd(files, xsd_names)) is not None:
-        main = detected
-    else:
+            raise XsdError(f"main file {main_filename!r} not found in {where}")
+        return main
+    if len(xsd_names) == 1:
+        return xsd_names[0]
+    if not xsd_names:
         raise XsdError(
-            "could not determine the main schema; specify main_filename "
-            f"(candidates: {', '.join(sorted(xsd_names)) or 'none'})"
+            f"{where} contains no .xsd file (found: {', '.join(sorted(files)[:_MAX_LISTED_FILES])})"
         )
-    return files, main
+    detected = _detect_root_xsd(files, xsd_names)
+    if detected is None:
+        raise AmbiguousMainError(sorted(xsd_names))
+    return detected
 
 
 def build_xmlschema(stored: StoredXsd) -> etree.XMLSchema:
@@ -225,12 +284,36 @@ def build_xmlschema(stored: StoredXsd) -> etree.XMLSchema:
             raise XsdError("schema main file is unavailable; cannot validate")
 
         try:
-            xsd_tree = etree.parse(str(main_on_disk), make_parser())
+            # Entities of a DOCTYPE that passed inspect_dtd on ingest (W3C
+            # xmldsig declares its namespace that way) must be expanded.
+            main_bytes = stored.files[stored.main_filename]
+            parser = make_parser(internal_entities=inspect_dtd(main_bytes))
+            xsd_tree = etree.parse(str(main_on_disk), parser)
+            root = xsd_tree.getroot()
+            if etree.QName(root).text != f"{{{XSD_NS}}}schema":
+                raise XsdError(_not_a_schema_message(root))
             return etree.XMLSchema(xsd_tree)
         except etree.XMLSchemaParseError as exc:
-            raise XsdError(f"not a valid XSD schema: {_scrub(exc, tmp_root)}") from exc
+            detail = _scrub(exc, tmp_root)
+            missing = _missing_references(stored.files)
+            if not missing:
+                raise XsdError(f"not a valid XSD schema: {detail}") from exc
+            listed = ", ".join(missing[:_MAX_LISTED_FILES])
+            if len(missing) > _MAX_LISTED_FILES:
+                listed += ", …"
+            noun = "file is" if len(missing) == 1 else "files are"
+            raise XsdError(
+                f"the schema is incomplete: {len(missing)} imported or included {noun} "
+                f"missing ({listed}), so it does not compile. Upload the schema together "
+                f"with its imported and included files as one ZIP archive. The compiler "
+                f"stopped at: {detail}"
+            ) from exc
         except etree.XMLSyntaxError as exc:
-            raise XsdError(f"schema could not be parsed: {_scrub(exc, tmp_root)}") from exc
+            if not main_bytes.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"<"):
+                raise XsdError(humanize_syntax_error(exc, main_bytes)) from exc
+            raise XsdError(
+                f"schema could not be parsed: {syntax_message(_scrub(exc, tmp_root))}"
+            ) from exc
 
 
 def _scrub(exc: Exception, tmp_root: Path) -> str:
@@ -244,15 +327,24 @@ def load_xsd(
     zip_bytes: bytes | None,
     main_filename: str | None,
     main_bytes: bytes | None,
+    files: dict[str, bytes] | None = None,
 ) -> StoredXsd:
-    """Build a :class:`StoredXsd` from either a ZIP or a single schema file,
-    verifying it compiles. Raises :class:`XsdError` on any failure."""
-    if zip_bytes is not None:
+    """Build a :class:`StoredXsd` from a ZIP, a single schema file or several
+    loose files (``files``: name -> bytes), verifying it compiles. Raises
+    :class:`XsdError` on any failure."""
+    if files is not None:
+        loose = files
+        files = {}
+        for name, data in loose.items():
+            inspect_dtd(data)
+            files[str(_safe_relative_path(name, name))] = data
+        main = _pick_main(files, main_filename, "the upload")
+    elif zip_bytes is not None:
         files, main = _files_from_zip(zip_bytes, main_filename)
     else:
         if main_bytes is None:
             raise XsdError("no schema content provided")
-        _reject_known_bombs(main_bytes)
+        inspect_dtd(main_bytes)
         name = str(_safe_relative_path(main_filename or "schema.xsd", "schema.xsd"))
         files, main = {name: main_bytes}, name
 
@@ -272,7 +364,7 @@ def load_xsd_from_files(files: dict[str, bytes], main_filename: str) -> StoredXs
     if the main file is missing or the schema does not compile."""
     normalised: dict[str, bytes] = {}
     for name, data in files.items():
-        _reject_known_bombs(data)
+        inspect_dtd(data)
         normalised[str(_safe_relative_path(name, name))] = data
     main = str(_safe_relative_path(main_filename, main_filename))
     if main not in normalised:

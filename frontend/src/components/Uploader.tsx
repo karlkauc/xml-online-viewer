@@ -32,12 +32,13 @@ interface SourceLoaderProps {
   accept: string;
   placeholder: string;
   status: string | null;
-  onFile: (file: File, mainFilename?: string) => Promise<void>;
+  onFile: (files: File[], mainFilename?: string) => Promise<void>;
   onText: (content: string) => Promise<void>;
   onUrl: (url: string) => Promise<void>;
-  // When set, a ZIP may contain several schemas; an optional input lets the
-  // user name the main file if it cannot be auto-detected.
-  showMainFilename?: boolean;
+  // When set, several files (a schema with the files it imports) or a ZIP of
+  // them may be loaded; if the server cannot tell which schema is the main
+  // one, the user picks it from the candidates it returns.
+  multiple?: boolean;
   // When set, a "Releases" tab lets the user load a schema from a published
   // FundsXML GitHub release.
   onRelease?: (tagName: string, filename: string) => Promise<void>;
@@ -67,7 +68,7 @@ function SourceLoader({
   onFile,
   onText,
   onUrl,
-  showMainFilename,
+  multiple,
   onRelease,
   defaultMode = "file",
   disabled,
@@ -84,7 +85,7 @@ function SourceLoader({
   const [schemaMixUp, setSchemaMixUp] = useState(false);
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
-  const [mainFilename, setMainFilename] = useState("");
+  const [choice, setChoice] = useState<{ files: File[]; candidates: string[]; main: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // Finger input has no drag-and-drop; say so instead of inviting a drop.
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
@@ -96,8 +97,6 @@ function SourceLoader({
   useEffect(() => {
     if (status) setSchemaMixUp(false);
   }, [status]);
-
-  const main = () => mainFilename.trim() || undefined;
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setError(null);
@@ -123,6 +122,25 @@ function SourceLoader({
       void run(fn);
     },
     [rejectSchemaInput, run],
+  );
+
+  /** Load the picked files; a server that cannot tell the main schema apart
+   * answers with candidates, which become a choice instead of an error. */
+  const loadFiles = useCallback(
+    (files: File[], mainFilename?: string) => {
+      if (files.length === 0) return;
+      if (!mainFilename) setChoice(null);
+      guarded(async () => {
+        try {
+          await onFile(files, mainFilename);
+          setChoice(null);
+        } catch (err) {
+          if (!(err instanceof ApiError) || !err.candidates?.length) throw err;
+          setChoice({ files, candidates: err.candidates, main: err.candidates[0] });
+        }
+      }, files[0].name);
+    },
+    [guarded, onFile],
   );
 
   return (
@@ -169,22 +187,26 @@ function SourceLoader({
             onDrop={(e) => {
               e.preventDefault();
               setDragOver(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f) guarded(() => onFile(f, main()), f.name);
+              const dropped = Array.from(e.dataTransfer.files ?? []);
+              loadFiles(multiple ? dropped : dropped.slice(0, 1));
             }}
           >
             <input
               ref={fileInput}
               type="file"
               accept={accept}
+              multiple={multiple}
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) guarded(() => onFile(f, main()), f.name);
+                loadFiles(Array.from(e.target.files ?? []));
+                // Let the same selection be picked again after an error.
+                e.target.value = "";
               }}
             />
             <p className="mb-2 text-slate-600 dark:text-slate-400">
-              {coarsePointer ? "Choose a file to load." : "Drop a file here or choose one"}
+              {coarsePointer
+                ? `Choose ${multiple ? "one or more files" : "a file"} to load.`
+                : `Drop ${multiple ? "files" : "a file"} here or choose ${multiple ? "them" : "one"}`}
             </p>
             <button
               type="button"
@@ -192,7 +214,7 @@ function SourceLoader({
               disabled={busy || disabled}
               onClick={() => fileInput.current?.click()}
             >
-              Choose file…
+              {multiple ? "Choose files…" : "Choose file…"}
             </button>
             {onSample && (
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -207,18 +229,41 @@ function SourceLoader({
                 </button>
               </p>
             )}
-            {showMainFilename && (
-              <label className="block mt-3 text-[11px] text-slate-500 dark:text-slate-400">
-                ZIP with multiple XSDs? The main schema is auto-detected — or
-                specify it here:
-                <input
-                  type="text"
-                  placeholder="e.g. FundsXML4.xsd"
-                  className="mt-1 w-full font-mono text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-                  value={mainFilename}
-                  onChange={(e) => setMainFilename(e.target.value)}
-                />
-              </label>
+            {multiple && !choice && (
+              <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+                Schema split over several files? Select them all together, or load one ZIP.
+              </p>
+            )}
+            {choice && (
+              <div className="mt-3 text-left text-xs">
+                <label className="block text-slate-600 dark:text-slate-300">
+                  Which one is the main schema?
+                  <select
+                    className="mt-1 w-full font-mono text-xs px-2 py-1 touch:py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    value={choice.main}
+                    onChange={(e) => setChoice({ ...choice, main: e.target.value })}
+                  >
+                    {choice.candidates.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() => loadFiles(choice.files, choice.main)}
+                  >
+                    Load
+                  </button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => setChoice(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -322,7 +367,7 @@ interface UploaderProps {
   onXmlText: (c: string) => Promise<void>;
   onXmlUrl: (u: string) => Promise<void>;
   onXmlSample: () => Promise<void>;
-  onXsdFile: (f: File, mainFilename?: string) => Promise<void>;
+  onXsdFiles: (files: File[], mainFilename?: string) => Promise<void>;
   onXsdText: (c: string) => Promise<void>;
   onXsdUrl: (u: string) => Promise<void>;
   onXsdRelease: (tagName: string, filename: string) => Promise<void>;
@@ -343,7 +388,7 @@ export function Uploader(props: UploaderProps) {
         accept=".xml,application/xml,text/xml"
         placeholder="<FundsXML4>…"
         status={props.xmlStatus}
-        onFile={props.onXmlFile}
+        onFile={(files) => props.onXmlFile(files[0])}
         onText={props.onXmlText}
         onUrl={props.onXmlUrl}
         onSample={props.onXmlSample}
@@ -355,7 +400,7 @@ export function Uploader(props: UploaderProps) {
         accept=".xsd,.zip,application/zip,application/xml"
         placeholder="<xs:schema>…"
         status={props.xsdStatus}
-        onFile={props.onXsdFile}
+        onFile={props.onXsdFiles}
         onText={props.onXsdText}
         onUrl={props.onXsdUrl}
         onRelease={props.onXsdRelease}
@@ -364,7 +409,7 @@ export function Uploader(props: UploaderProps) {
         disabled={props.xsdDisabled}
         disabledHint="Load an XML file first — a schema is only used to validate it."
         statusNote={props.xsdStatusNote}
-        showMainFilename
+        multiple
       />
     </div>
   );

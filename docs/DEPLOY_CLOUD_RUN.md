@@ -24,6 +24,7 @@ gcloud run deploy xml-online-viewer \
   --concurrency 20 \
   --max-instances 5 \
   --timeout 120 \
+  --session-affinity \
   --set-env-vars LOG_LEVEL=INFO,MAX_UPLOAD_MB=50,MAX_ZIP_ENTRIES=2000,MAX_ZIP_UNCOMPRESSED_MB=200,MAX_XML_NODES=500000,CACHE_TTL_MIN=60,CACHE_MAX_ENTRIES=64,FETCH_MAX_RESPONSE_MB=10
 ```
 
@@ -32,6 +33,9 @@ gcloud run deploy xml-online-viewer \
   and `MAX_ZIP_UNCOMPRESSED_MB` bound worst-case memory per request.
 - **Concurrency 20 / max-instances:** caps cost and parallel heavy parses. Tune
   with load tests. Lower concurrency = more isolation per request.
+- **session-affinity:** documents and schemas live in a per-instance cache
+  (sliding `CACHE_TTL_MIN`), so a visitor's validate call should reach the
+  instance that parsed their upload. Best effort only.
 - **timeout 120:** large schema compiles can be slow; raise if needed.
 - The container already runs as **non-root** (UID 1001) and the base images are
   **pinned by digest** — keep rebuilding to pick up libxml2/base patches.

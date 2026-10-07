@@ -18,7 +18,8 @@ from lxml import etree
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.parser.security import SecurityError, _reject_known_bombs, make_parser
+from app.parser.errors import HTML_PAGE_MESSAGE, clean_input, humanize_syntax_error, looks_like_html
+from app.parser.security import SecurityError, inspect_dtd, make_parser
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 
@@ -71,6 +72,12 @@ class XmlDocModel(BaseModel):
     # schema locations.
     source_url: str | None = None
     schema_hints: list[SchemaHint] = Field(default_factory=list)
+    # Repairs made to the input before parsing (``errors.clean_input``).
+    notices: list[str] = Field(default_factory=list)
+
+
+class XmlError(ValueError):
+    """The submitted document is not well-formed XML; the message is fit to show."""
 
 
 @dataclass
@@ -90,12 +97,14 @@ class StoredXml:
 def pretty_print(xml_bytes: bytes) -> bytes:
     """Pretty-print ``xml_bytes`` so each element occupies its own line.
 
-    Raises ``etree.XMLSyntaxError`` if the input is not well-formed.
+    Raises ``etree.XMLSyntaxError`` if the input is not well-formed and
+    :class:`SecurityError` for DTD constructs :func:`inspect_dtd` refuses.
     """
-    _reject_known_bombs(xml_bytes)
+    # Entities are expanded only when the DOCTYPE is a bounded set of literals;
+    # the output then carries their values, so later parses need not resolve.
     parser = etree.XMLParser(
         remove_blank_text=True,
-        resolve_entities=False,
+        resolve_entities=inspect_dtd(xml_bytes),
         no_network=True,
         load_dtd=False,
         huge_tree=False,
@@ -237,10 +246,16 @@ def parse_xml(data: bytes, filename: str, *, base_url: str | None = None) -> Sto
     ``base_url`` is the URL the document was fetched from, if any; relative
     schema locations are resolved against it.
 
-    Raises ``etree.XMLSyntaxError`` if the document is not well-formed and
+    Raises :class:`XmlError` if the document is not well-formed and
     :class:`SecurityError` for banned DTD constructs.
     """
-    pretty = pretty_print(data)
+    data, notices = clean_input(data)
+    if looks_like_html(data):
+        raise XmlError(HTML_PAGE_MESSAGE)
+    try:
+        pretty = pretty_print(data)
+    except etree.XMLSyntaxError as exc:
+        raise XmlError(humanize_syntax_error(exc, data)) from exc
     tree = etree.parse(BytesIO(pretty), make_parser())
     root_el = tree.getroot()
 
@@ -260,5 +275,6 @@ def parse_xml(data: bytes, filename: str, *, base_url: str | None = None) -> Sto
         node_count=counter[0],
         source_url=base_url,
         schema_hints=_schema_hints(root_el, base_url),
+        notices=notices,
     )
     return StoredXml(model=model, line_to_id=line_to_id)

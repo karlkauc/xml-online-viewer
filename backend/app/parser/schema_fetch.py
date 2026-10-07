@@ -34,14 +34,13 @@ from app.parser.security import fetch_url as _default_fetch
 from app.parser.security import make_parser
 from app.parser.xsd_store import (
     _REF_TAGS,
+    XSD_NS,
     XsdError,
     _iter_schema_locations,
     _safe_relative_path,
 )
 
 logger = logging.getLogger(__name__)
-
-XSD_NS = "http://www.w3.org/2001/XMLSchema"
 
 # Upper bound on how many documents one auto-detected schema may pull in.
 AUTO_SCHEMA_MAX_DOCS = 25

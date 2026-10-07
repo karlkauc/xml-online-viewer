@@ -37,6 +37,24 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   FundsXML case). The frontend funnels every XML entry point through `applyXml`
   in `App.tsx`; `appStore.xsdSource` (`"auto" | "manual"`) makes sure a schema
   the user picked is never overwritten.
+- **Input robustness** (ported from the XSD viewer; keep the two in step).
+  `parser/errors.py` repairs what is safe to repair before parsing
+  (`clean_input`: Markdown fence, copy of the browser's XML view, whitespace
+  before `<?xml`; each repair becomes an `XmlDocModel.notices` entry shown under
+  Files) and turns lxml errors into actionable text (`humanize_syntax_error`,
+  `syntax_message`). `security.inspect_dtd` replaces the blanket DOCTYPE ban: one
+  DOCTYPE with a bounded subset of literal `<!ENTITY>`/`<!ATTLIST>` is accepted
+  and expanded, DTD markup anywhere else in the buffer is refused — every file
+  of a schema set must pass it, because libxml2 parses includes itself with
+  entity substitution. `fetch_url` prepends `https://` to a bare `host/path`.
+- **Multi-file XSD.** `POST /api/xsd/upload` takes one schema, one ZIP, or
+  several loose files (repeated `file` field). When the main schema is
+  ambiguous the 422 carries `candidates` (`MainSchemaChoice`, handler in
+  `main.py`) and the Uploader offers the choice. A compile failure names the
+  `schemaLocation` targets missing from the set (`_missing_references`).
+- **Expired cache entries.** `TtlCache` expiry is sliding, and `api/client.ts`
+  remembers how the current XML/XSD was loaded: on "XML/XSD not found or
+  expired" `withReload` repeats that load (ids are content hashes) and retries.
 - **Responsive tiers.** Phone `< md` (768): one pane at a time, switched by
   the bottom `MobileNav` (Tree / Diagram / Validation). `App.tsx` keeps
   `viewMode` (store) plus a local `validationOpen` flag that is the phone's
@@ -51,7 +69,8 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   menu below `lg`; the diagram toolbar goes icon-only below `md`
   (`DiagramView/DiagramToolbar.tsx`, first fit via `fitOptions.ts`).
 - **Usage statistics** (`docs/USAGE_STATS.md`): off unless `USAGE_DB_URL` is
-  set. Routers call `emit("xml_load"|"xsd_load"|"validate"|"export", …)`,
+  set. `app_version` is `release_version()`: the package version plus
+  Cloud Run's `K_REVISION`, so deploys can be told apart. Routers call `emit("xml_load"|"xsd_load"|"validate"|"export", …)`,
   `spa_fallback` (`mount_spa()`) emits `page_view` only for routes in `SPA_ROUTES`
   (`/`, `/fundsxml`) — every other unknown path is a 404 without event, so add new
   client-side routes there; rows land in `usage_event`

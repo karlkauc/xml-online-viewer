@@ -129,3 +129,97 @@ test.describe("tablet", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+test.describe("notes about the loaded document", () => {
+  const file = (name: string, content: string) => ({ name, mimeType: "application/xml", buffer: Buffer.from(content) });
+
+  test("a repaired input and an unloadable schema are reported even with Files collapsed", async ({ page }, testInfo) => {
+    await page.goto("/");
+    // Whitespace before the declaration is repaired; the schema location is
+    // relative, so there is nothing to download for an uploaded file.
+    const xml = '\n<?xml version="1.0"?>\n<a xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="a.xsd"/>';
+    await page.locator('input[type="file"]').first().setInputFiles(file("a.xml", xml));
+    await expect(page.locator(".react-flow")).toBeVisible();
+    if (testInfo.project.name === "phone") {
+      await expect(page.getByRole("button", { name: /Files/ })).toHaveAttribute("aria-expanded", "false");
+    }
+    await expect(page.getByText("Leading whitespace before the XML declaration was removed.", { exact: false })).toBeVisible();
+    await expect(page.getByText("This document references a.xsd.", { exact: false })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test("input that is not XML is named instead of quoting the parser", async ({ page }) => {
+    await page.goto("/");
+    await page.locator('input[type="file"]').first().setInputFiles(file("data.xml", '{"a": 1}'));
+    await expect(page.getByRole("alert").filter({ hasText: "not an XML file — it looks like JSON" })).toBeVisible();
+  });
+});
+
+test.describe("expired documents", () => {
+  test("validation reloads a document the server no longer has", async ({ page }, testInfo) => {
+    // Answer the first validate call the way an instance that never saw the
+    // upload would; the client must re-send the file and try again.
+    let expired = false;
+    await page.route("**/api/validate", async (route) => {
+      if (expired) return route.continue();
+      expired = true;
+      await route.fulfill({ status: 404, contentType: "application/json", body: '{"detail":"XML not found or expired"}' });
+    });
+    await loadXml(page);
+    const reupload = page.waitForRequest((r) => r.url().endsWith("/api/xml/upload"));
+    if (testInfo.project.name === "phone") {
+      await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: "Validation" }).click();
+    } else {
+      await page.getByRole("button", { name: "Show validation" }).click();
+    }
+    await loadXsd(page);
+    await reupload;
+    await expect(page.getByText(EXPECTED_ERRORS)).toBeVisible();
+    await expect(page.getByText("not found or expired")).toBeHidden();
+  });
+});
+
+test.describe("schema split over several files", () => {
+  const XS = 'xmlns:xs="http://www.w3.org/2001/XMLSchema"';
+  const xsd = (name: string, content: string) => ({ name, mimeType: "application/xml", buffer: Buffer.from(content) });
+  const DEP = xsd("dep.xsd", `<xs:schema ${XS} targetNamespace="urn:d"><xs:simpleType name="T"><xs:restriction base="xs:integer"/></xs:simpleType></xs:schema>`);
+  const MAIN = xsd(
+    "main.xsd",
+    `<xs:schema ${XS} xmlns:d="urn:d"><xs:import namespace="urn:d" schemaLocation="dep.xsd"/><xs:element name="a" type="d:T"/></xs:schema>`,
+  );
+
+  async function loadDocument(page: Page) {
+    await page.goto("/");
+    await page.locator('input[type="file"]').first().setInputFiles(xsd("a.xml", "<a>12</a>"));
+    await expect(page.locator(".react-flow")).toBeVisible();
+    const files = page.getByRole("button", { name: /Files/ });
+    if ((await files.getAttribute("aria-expanded")) === "false") await files.click();
+  }
+
+  /** Phones collapse Files once the schema loaded; its summary row names it. */
+  async function expectSchemaLoaded(page: Page, name: string) {
+    await expect(page.getByText(new RegExp(`(✓ |XSD: )${name.replace(".", "\\.")}`)).first()).toBeVisible();
+  }
+
+  test("the main file alone names what is missing; with its import it loads", async ({ page }) => {
+    await loadDocument(page);
+    const input = page.locator('input[type="file"]').nth(1);
+    await input.setInputFiles(MAIN);
+    await expect(page.getByRole("alert").filter({ hasText: "1 imported or included file is missing (dep.xsd)" })).toBeVisible();
+    await input.setInputFiles([DEP, MAIN]);
+    await expectSchemaLoaded(page, "main.xsd");
+  });
+
+  test("an ambiguous set asks which schema is the main one", async ({ page }) => {
+    await loadDocument(page);
+    const other = xsd("other.xsd", `<xs:schema ${XS}><xs:element name="a" type="xs:integer"/></xs:schema>`);
+    await page.locator('input[type="file"]').nth(1).setInputFiles([DEP, MAIN, other]);
+    const select = page.getByLabel("Which one is the main schema?");
+    await expect(select).toBeVisible();
+    await expect(select.locator("option")).toHaveText(["dep.xsd", "main.xsd", "other.xsd"]);
+    await expectNoHorizontalOverflow(page);
+    await select.selectOption("other.xsd");
+    await page.getByRole("button", { name: "Load", exact: true }).click();
+    await expectSchemaLoaded(page, "other.xsd");
+  });
+});
