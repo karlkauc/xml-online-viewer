@@ -178,7 +178,8 @@ def _host_is_allowed(host: str) -> bool:
     # ALLOWED_SCHEMA_HOSTS turns this into a strict lockdown whitelist.
     if not settings.allowed_schema_hosts:
         return True
-    return any(pattern.search(host) for pattern in settings.allowed_schema_hosts)
+    # fullmatch: an unanchored 'example\.com' would also allow example.com.evil.net.
+    return any(pattern.fullmatch(host) for pattern in settings.allowed_schema_hosts)
 
 
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
@@ -214,7 +215,9 @@ def _resolve_all_addrs(host: str) -> list[str]:
     try:
         infos = socket.getaddrinfo(host, None)
     except OSError as exc:
-        raise SecurityError(f"DNS resolution failed for {host!r}: {exc}") from exc
+        # The resolver's own message says nothing useful to a visitor; keep it in the log.
+        logger.info("DNS resolution failed", extra={"ctx_host": host, "ctx_error": str(exc)})
+        raise SecurityError(f"host {host!r} could not be resolved") from exc
     return list({info[4][0] for info in infos})
 
 
@@ -255,7 +258,8 @@ def _verify_url(url: str) -> tuple[str, str]:
     for addr in addrs:
         if _ip_is_private(addr):
             raise SecurityError(
-                f"host {host!r} resolves to a private/loopback address ({addr}); refusing to fetch"
+                # No address in the message: it would map internal names to IPs for anyone.
+                f"host {host!r} resolves to a private/loopback address; refusing to fetch"
             )
     if not addrs:
         raise SecurityError(f"host {host!r} did not resolve to any address")
@@ -302,7 +306,9 @@ def fetch_url(url: str) -> FetchedResource:
             with client.stream(
                 "GET",
                 target,
-                headers={"Host": parsed.netloc.decode("ascii")},
+                # identity: httpx inflates gzip per chunk with no limit, so one small
+                # chunk could expand far beyond the size cap before it is counted.
+                headers={"Host": parsed.netloc.decode("ascii"), "Accept-Encoding": "identity"},
                 extensions={"sni_hostname": host},
             ) as response:
                 if response.is_redirect:

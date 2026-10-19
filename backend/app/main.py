@@ -286,7 +286,9 @@ _SPA_HEADERS = {
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "font-src 'self' data:; "
-        "connect-src 'self'"
+        "connect-src 'self'; "
+        # Nothing on the page needs these; closing them limits what injected markup could do.
+        "base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'"
     ),
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
@@ -294,6 +296,7 @@ _SPA_HEADERS = {
     # with ?from=xsd-viewer and posts the XML file to it.
     "Cross-Origin-Opener-Policy": "unsafe-none",
     "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 }
 
 
