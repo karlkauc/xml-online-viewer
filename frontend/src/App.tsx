@@ -62,6 +62,16 @@ function pickMainAsset(release: FundsXmlRelease) {
   );
 }
 
+// Server-rendered pages (backend/app/content); /guides lists all of them.
+const GUIDES: [string, string][] = [
+  ["/errors", "XML validation errors explained"],
+  ["/features/excel-report", "Validation errors to Excel"],
+  ["/validate/fundsxml", "Validate FundsXML files"],
+  ["/validate/iso-20022", "Validate ISO 20022 payment files"],
+  ["/validate/xrechnung", "XRechnung and UBL: XSD vs. Schematron"],
+  ["/guides", "All guides and resources →"],
+];
+
 export default function App() {
   const xmlDoc = useApp((s) => s.xmlDoc);
   const xsdInfo = useApp((s) => s.xsdInfo);
@@ -509,6 +519,18 @@ export default function App() {
                   "Sign documents, generate PDFs, query with XPath/XQuery — all offline",
                 ]}
               />
+              <section className="mt-8 text-sm">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Guides</h3>
+                <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+                  {GUIDES.map(([href, label]) => (
+                    <li key={href}>
+                      <a className="text-accent hover:underline" href={href}>
+                        {label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
               <FamilyFooter className="mt-6 text-xs text-slate-500 dark:text-slate-400" />
             </div>
             </div>

@@ -136,3 +136,26 @@ def test_report_route_is_noindex(client) -> None:
     r = c.get("/report")
     assert r.status_code == 200
     assert '<meta name="robots" content="noindex" />' in r.text
+
+
+def test_every_page_is_reachable_from_the_guides_hub() -> None:
+    """No orphan pages: each indexable page is linked from /guides or from a page /guides links to."""
+    import re as _re
+
+    from app.content.pages import HUB_SLUG
+
+    pages = all_pages()
+
+    def links(slug: str) -> set[str]:
+        doc = render_page(pages[slug], "https://example.test")
+        return {m.split("#")[0].split("?")[0].strip("/") for m in _re.findall(r'href="(/[^"]*)"', doc)}
+
+    first = links(HUB_SLUG)
+    reachable = first | {target for slug in first if slug in pages for target in links(slug)}
+    orphans = [s for s, p in pages.items() if s != HUB_SLUG and not p.noindex and s not in reachable]
+    assert orphans == []
+
+
+def test_content_pages_link_back_to_the_hub() -> None:
+    page = next(p for s, p in all_pages().items() if s != "guides")
+    assert 'href="/guides"' in render_page(page, "https://example.test")

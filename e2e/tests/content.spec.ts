@@ -53,3 +53,11 @@ test("a ?url=&xsd= link loads, validates, explains the error and shares the repo
   await page.getByRole("button", { name: /Excel report/ }).click();
   expect((await download).suggestedFilename()).toBe("validation_report_shared.xlsx");
 });
+
+test("the landing page links to the guides and error explanations", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "XML validation errors explained" })).toHaveAttribute("href", "/errors");
+  await page.getByRole("link", { name: "All guides and resources →" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Guides and resources" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /XML validation errors explained/ })).toBeVisible();
+});

@@ -21,6 +21,9 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   OData viewers — keep it in step. `app/report/error_catalog.py` maps libxml2 `type_name`s to the
   `/errors/<slug>` pages (each names the Xerces `cvc-*` code); errors carry `help_slug`, the
   Excel report a Help column. Every slug in `HELP` needs its page (tested).
+- **Content links.** `/guides` is generated from all pages per `site.HUB_SECTIONS`; a test
+  fails on any page it cannot reach. The SPA landing links the main pages and `/guides`;
+  `GET /api/content/pages` lists the slugs that exist.
 - `frontend/src/` — SPA: `components/` (Uploader, XmlTreeView, DiagramView,
   ValidationPanel, FundsXmlReleases), `stores/appStore.ts`, `api/client.ts`.
 - `docs/DEPLOY_CLOUD_RUN.md` — hardening/deploy reference.
