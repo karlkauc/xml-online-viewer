@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "xml-online-viewer"
 version = "0.1.0"
 description = "XML Online Viewer: view XML data and validate it against an XSD schema, with Excel error reports."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Karl Kauc" }]
 
 dependencies = [
@@ -20,6 +20,7 @@ dependencies = [
     "openpyxl>=3.1",
     "psycopg[binary]>=3.2",
     "geoip2>=4.8",
+    "markdown-it-py>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.parser.resources" = ["*.xsd"]
+"app.content" = ["template.html", "faq.toml", "pages/**/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -45,7 +47,7 @@ addopts = "-ra --strict-markers"
 
 [tool.ruff]
 line-length = 110
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "C4", "SIM"]

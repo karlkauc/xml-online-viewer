@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.parser.security import make_parser
 from app.parser.xml_tree import StoredXml
 from app.parser.xsd_store import StoredXsd, build_xmlschema
+from app.report.error_catalog import help_slug
 
 
 class ValidationErrorItem(BaseModel):
@@ -27,6 +28,8 @@ class ValidationErrorItem(BaseModel):
     domain: str | None = None
     path: str | None = None
     node_id: str | None = None
+    # /errors/<slug> help page for this kind of error (app/report/error_catalog.py).
+    help_slug: str | None = None
 
 
 class ValidationResponse(BaseModel):
@@ -55,6 +58,7 @@ def _extract_errors(error_log: object, line_to_id: dict[int, str]) -> list[Valid
                 domain=entry.domain_name or None,
                 path=entry.path or None,
                 node_id=node_id,
+                help_slug=help_slug(entry.type_name, entry.message),
             )
         )
     return items

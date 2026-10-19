@@ -5,15 +5,97 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>XML Online Viewer — view and validate XML files online</title>
+    <!--
+      Title, description, canonical and og:* are per-route placeholders: the
+      backend (backend/app/spa.py, render_shell) rewrites them for each client
+      route before serving the shell. Keep the attribute order as-is.
+    -->
+    <title>Validate XML against XSD Online – Tree Viewer &amp; Excel Error Report (Free)</title>
     <meta
       name="description"
-      content="Open an XML file in your browser and explore it as a tree or diagram. Optionally validate it against an XSD schema and export the errors to Excel. No install, no account."
+      content="Free online XML validator and viewer: validate an XML file against its XSD (detected from xsi:schemaLocation or uploaded), export the errors to Excel, and explore the document as a collapsible tree or diagram. No install, no account."
     />
+    <link rel="canonical" href="https://www.xml-viewer.online/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="XML Online Viewer" />
+    <meta property="og:title" content="XML Online Viewer" />
+    <meta
+      property="og:description"
+      content="Free online XML validator and viewer: validate an XML file against its XSD (detected from xsi:schemaLocation or uploaded), export the errors to Excel, and explore the document as a collapsible tree or diagram. No install, no account."
+    />
+    <meta property="og:url" content="https://www.xml-viewer.online/" />
+    <meta property="og:image" content="https://www.xml-viewer.online/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="XML Online Viewer — XML tree with validation errors and the Excel report" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Not executed by the browser, so the CSP (script-src 'self') does not apply. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "XML Online Viewer",
+        "url": "https://www.xml-viewer.online/",
+        "description": "Free online XML validator and viewer: validate an XML file against its XSD (detected from xsi:schemaLocation or uploaded), export the errors to Excel, and explore the document as a collapsible tree or diagram.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "featureList": [
+          "Validate XML against an XSD, multi-file schemas from a ZIP",
+          "Automatic schema detection from xsi:schemaLocation",
+          "Excel report of all validation errors with context lines",
+          "Collapsible tree and diagram view with search",
+          "Every error highlighted on its node",
+          "FundsXML schema releases built in"
+        ],
+        "screenshot": "https://www.xml-viewer.online/og-image.png",
+        "isRelatedTo": [
+          { "@type": "WebApplication", "name": "Online XSD Viewer", "url": "https://www.xsd-viewer.online/" },
+          { "@type": "WebApplication", "name": "Online OData Viewer", "url": "https://www.odata-viewer.online/" },
+          { "@type": "SoftwareApplication", "name": "FreeXmlToolkit", "url": "https://karlkauc.github.io/FreeXmlToolkit/" }
+        ],
+        "license": "https://github.com/karlkauc/xml-online-viewer/blob/main/LICENSE"
+      }
+    </script>
+    <!--faq-jsonld-->
     <script src="/theme-init.js"></script>
   </head>
   <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-    <div id="root"></div>
+    <!--
+      Static landing content: crawlers that do not execute JavaScript (and
+      Google's first, non-rendered pass) still see real text. React replaces
+      it on mount.
+    -->
+    <div id="root">
+      <main class="max-w-2xl mx-auto px-6 py-16 font-sans">
+        <h1 class="text-2xl font-semibold">Validate XML against XSD online</h1>
+        <p class="mt-4">
+          Drop an XML file and validate it against its XML Schema. When the document names its schema in
+          <code>xsi:schemaLocation</code> or <code>xsi:noNamespaceSchemaLocation</code>, the schema and everything
+          it imports is fetched and applied automatically; otherwise add an <code>.xsd</code> or a ZIP of schema
+          files. Every error is pinned to the node that caused it.
+        </p>
+        <p class="mt-4">
+          Export all errors to an Excel report — line, XML path, message and the surrounding lines — and hand it
+          to whoever produces the file. Common errors are explained in
+          <a class="underline" href="/errors">XML validation errors explained</a>. Browse the document as a
+          collapsible tree or diagram, search it, and validate
+          <a class="underline" href="/validate/fundsxml">FundsXML</a> and
+          <a class="underline" href="/validate/iso-20022">ISO 20022</a> files against their official schemas.
+        </p>
+        <p class="mt-4">
+          Sister tools by the same author:
+          <a class="underline" href="https://www.xsd-viewer.online/">Online XSD Viewer</a> and
+          <a class="underline" href="https://www.odata-viewer.online/">Online OData Viewer</a>.
+        </p>
+        <!--faq-->
+        <noscript>
+          <p class="mt-4">Please enable JavaScript to use the viewer.</p>
+        </noscript>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

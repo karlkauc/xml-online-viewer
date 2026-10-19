@@ -8,8 +8,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import app.main as main_module
-from app.main import mount_spa
+import app.spa as spa_module
+from app.spa import mount_spa
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     app = FastAPI()
     mount_spa(app, tmp_path)
     emitted: list[tuple[str, dict]] = []
-    monkeypatch.setattr(main_module, "emit", lambda event_type, **f: emitted.append((event_type, f)))
+    monkeypatch.setattr(spa_module, "emit", lambda event_type, **f: emitted.append((event_type, f)))
     return TestClient(app), emitted
 
 

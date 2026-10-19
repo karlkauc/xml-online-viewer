@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -186,7 +186,7 @@ async def _get_releases() -> FundsXmlReleasesResponse:
         releases = _shape_releases(raw)
         response = FundsXmlReleasesResponse(
             releases=releases,
-            cached_at=datetime.now(timezone.utc),
+            cached_at=datetime.now(UTC),
             ttl_seconds=_CACHE_TTL,
         )
         _cached_response = response

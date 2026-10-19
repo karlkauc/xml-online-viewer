@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /go/
+
+Sitemap: https://www.xml-viewer.online/sitemap.xml

@@ -47,6 +47,9 @@ ENV_VARS+=',MAX_XML_NODES=500000'
 ENV_VARS+=',CACHE_TTL_MIN=60'
 ENV_VARS+=',CACHE_MAX_ENTRIES=64'
 ENV_VARS+=',FETCH_MAX_RESPONSE_MB=10'
+# IndexNow key (public by design: served as /<key>.txt); tools/indexnow_ping.py uses it.
+INDEXNOW_KEY='0fb74a1e8c1f7c4842a88cee9ed85e50'
+ENV_VARS+=",INDEXNOW_KEY=$INDEXNOW_KEY"
 ENV_VARS+=',USAGE_DB_URL=postgresql://xmlviewer@62.238.116.11:5432/xmlviewer_stats?sslmode=require'
 
 SECRETS='USAGE_DB_PASSWORD=xmlviewer-feedback-db-password:latest'
@@ -63,3 +66,8 @@ gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" 
   --session-affinity \
   --set-env-vars "$ENV_VARS" \
   --update-secrets "$SECRETS"
+
+# Tell Bing & co. about new or changed pages (sitemap URLs). Opt-in: INDEXNOW_PING=1 scripts/deploy.sh
+if [[ "${INDEXNOW_PING:-0}" == "1" ]]; then
+  python3 tools/indexnow_ping.py --key "$INDEXNOW_KEY" --site "https://www.xml-viewer.online"
+fi

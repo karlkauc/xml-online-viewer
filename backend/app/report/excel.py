@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter
 
 from app import __version__
 from app.parser.validate import ValidationResponse
+from app.report.error_catalog import help_url
 
 # Application metadata shown in the report and stored in the workbook's
 # document properties.
@@ -38,9 +39,11 @@ _COLUMNS = [
     ("Type", 28),
     ("Domain", 18),
     ("Context (line before / error line / after)", 70),
+    ("Help", 45),
 ]
-# 1-based column index of the context cell.
+# 1-based column indexes of the context and help cells.
 _CONTEXT_COL = 9
+_HELP_COL = 10
 
 
 def _context_cell(prev: str | None, err: str | None, nxt: str | None) -> CellRichText | None:
@@ -86,7 +89,7 @@ def build_report(
     ws = wb.active
     ws.title = "Validation"
 
-    generated_at = datetime.now(timezone.utc)
+    generated_at = datetime.now(UTC)
 
     # Workbook document properties (visible under File ▸ Info / Properties).
     wb.properties.title = f"{APP_NAME} – Validation report"
@@ -139,14 +142,22 @@ def build_report(
             err.type_name,
             err.domain,
             _context_cell(prev_line, err_line, next_line),
+            help_url(err.help_slug),
         ]
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=r, column=col_idx, value=value)
+            # Messages quote the document's values, and a shared report arrives from a
+            # link: text starting with "=" must stay text, never become a formula.
+            if isinstance(value, str) and value.startswith("="):
+                cell.data_type = "s"
             if col_idx in (5, 6):  # path, message wrap
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
             elif col_idx == _CONTEXT_COL:  # context: monospace, wrapped lines
                 cell.font = _MONO_FONT
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
+            elif col_idx == _HELP_COL and value:  # what the error means, on xml-viewer.online
+                cell.hyperlink = value
+                cell.style = "Hyperlink"
 
     last_row = header_row + len(result.errors)
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)

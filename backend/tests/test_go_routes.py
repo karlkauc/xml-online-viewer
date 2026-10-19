@@ -37,3 +37,20 @@ def test_sponsor_goes_to_github_sponsors() -> None:
 
 def test_other_go_paths_are_404() -> None:
     assert _client().get("/go/unknown").status_code == 404
+
+
+def test_sister_redirects_carry_utm_source() -> None:
+    client = _client()
+    xsd = client.get("/go/xsd-viewer")
+    assert xsd.status_code == 302
+    assert xsd.headers["location"] == "https://www.xsd-viewer.online/?utm_source=xml-viewer&utm_medium=sister"
+    assert client.get("/go/xml-viewer").headers["location"] == "https://www.xml-viewer.online/"
+
+
+def test_share_ping_is_204() -> None:
+    assert _client().post("/api/usage/share", params={"source": "report"}).status_code == 204
+
+
+def test_content_faq_api() -> None:
+    entries = _client().get("/api/content/faq").json()
+    assert entries and all(e["question"] and e["answer_html"].startswith("<p>") for e in entries)
