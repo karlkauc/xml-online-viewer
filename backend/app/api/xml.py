@@ -37,7 +37,8 @@ def _finalize(stored: StoredXml) -> XmlDocModel:
     payload = stored.model.reformatted_xml.encode("utf-8")
     xml_id = hashlib.sha256(payload).hexdigest()[:32]
     stored.model.xml_id = xml_id
-    xml_cache.put(xml_id, stored)
+    # One node object per element on top of the text.
+    xml_cache.put(xml_id, stored, size=len(payload) * 6)
     logger.info(
         "xml parsed",
         extra={"ctx_xml_id": xml_id, "ctx_nodes": stored.model.node_count},

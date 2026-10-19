@@ -31,7 +31,7 @@ def test_security_headers_on_api(client: TestClient) -> None:
     assert r.headers["Strict-Transport-Security"].startswith("max-age=")
     assert r.headers["X-Content-Type-Options"] == "nosniff"
     assert r.headers["X-Frame-Options"] == "DENY"
-    assert "Content-Security-Policy" in r.headers
+    assert "sandbox" in r.headers["Content-Security-Policy"]
 
 
 # --- DTD bomb pre-filter scans the whole buffer -----------------------------
@@ -301,3 +301,28 @@ def test_a_dripping_server_hits_the_overall_deadline(monkeypatch: pytest.MonkeyP
 def test_urls_with_userinfo_are_refused() -> None:
     with pytest.raises(SecurityError, match="user name or password"):
         _verify_url("https://u:p@example.org/a.xml")
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "100.100.100.200",  # carrier-grade NAT (Alibaba Cloud metadata)
+        "192.88.99.1",
+        "198.51.100.7",
+        "240.0.0.1",
+        "::ffff:10.0.0.1",
+        "::ffff:169.254.169.254",
+        "2002:a9fe:a9fe::1",  # 6to4 of 169.254.169.254
+        "64:ff9b::a9fe:a9fe",  # NAT64 of 169.254.169.254
+        "fd00::1",
+        "224.0.0.1",
+        "not-an-ip",
+    ],
+)
+def test_non_public_addresses_are_blocked(address: str) -> None:
+    assert security._ip_is_private(address)
+
+
+@pytest.mark.parametrize("address", ["8.8.8.8", "2606:4700::1111", "::ffff:8.8.8.8", "64:ff9b::808:808"])
+def test_public_addresses_are_allowed(address: str) -> None:
+    assert not security._ip_is_private(address)

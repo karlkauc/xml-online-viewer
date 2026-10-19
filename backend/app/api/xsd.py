@@ -65,7 +65,7 @@ def _finalize(stored: StoredXsd) -> XsdInfo:
         digest.update(stored.files[name])
     xsd_id = digest.hexdigest()[:32]
     stored.xsd_id = xsd_id
-    xsd_cache.put(xsd_id, stored)
+    xsd_cache.put(xsd_id, stored, size=sum(len(data) for data in stored.files.values()) * 4)
     logger.info(
         "xsd loaded",
         extra={"ctx_xsd_id": xsd_id, "ctx_files": len(stored.files)},

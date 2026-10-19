@@ -78,6 +78,7 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
             xsd_filename=stored_xsd.main_filename,
             reformatted_xml=stored_xml.model.reformatted_xml,
         ),
+        size=len(stored_xml.model.reformatted_xml) * 2,
     )
     logger.info(
         "validation completed",
