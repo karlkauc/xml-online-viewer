@@ -213,12 +213,13 @@ async def upload_xsd_text(request: Request, payload: TextPayload) -> XsdInfo:
 @limiter.limit(WRITE_LIMIT)
 async def upload_xsd_url(request: Request, payload: UrlPayload) -> XsdInfo:
     try:
-        fetched = fetch_url(payload.url)
+        fetched = await asyncio.to_thread(fetch_url, payload.url)
     except SecurityError as exc:
         raise reject(
             "xsd_load", "url", 400, str(exc), schema_name=schema_display_name("url", payload.url)
         ) from exc
-    return _load(
+    return await asyncio.to_thread(
+        _load,
         source="url",
         schema_name=fetched.url,
         zip_bytes=None,

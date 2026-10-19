@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -100,13 +101,15 @@ async def upload_xml_text(request: Request, payload: TextPayload) -> XmlDocModel
 @router.post("/xml/url", response_model=XmlDocModel)
 @limiter.limit(WRITE_LIMIT)
 async def upload_xml_url(request: Request, payload: UrlPayload) -> XmlDocModel:
+    # Off the event loop: a slow server would otherwise stall every request.
+    # to_thread copies the ContextVar that ``emit`` reads.
     try:
-        fetched = fetch_url(payload.url)
+        fetched = await asyncio.to_thread(fetch_url, payload.url)
     except SecurityError as exc:
         raise reject(
             "xml_load", "url", 400, str(exc), schema_name=schema_display_name("url", payload.url)
         ) from exc
-    return _parse(fetched.content, fetched.url, source="url", base_url=fetched.url)
+    return await asyncio.to_thread(_parse, fetched.content, fetched.url, source="url", base_url=fetched.url)
 
 
 @router.get("/xml/{xml_id}", response_model=XmlDocModel)

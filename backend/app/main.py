@@ -27,7 +27,7 @@ from app.api.xsd import MainSchemaChoice
 from app.api.xsd import router as xsd_router
 from app.config import settings
 from app.logging_setup import configure_logging, new_request_id, request_id_var
-from app.rate_limit import limiter
+from app.rate_limit import client_ip, limiter
 from app.usage.context import RequestUsage, UsageTracker, bind, emit, unbind
 from app.usage.feedback import FeedbackStore
 from app.usage.geoip import GeoIp
@@ -178,7 +178,7 @@ async def request_logging(request: Request, call_next):
     usage: RequestUsage | None = (
         RequestUsage(
             tracker=tracker,
-            ip=request.client.host if request.client else None,
+            ip=client_ip(request),
             user_agent=request.headers.get("user-agent"),
             referrer=request.headers.get("referer"),
         )

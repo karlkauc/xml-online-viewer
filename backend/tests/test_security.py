@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import zipfile
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from lxml import etree
@@ -280,3 +281,23 @@ def test_comment_split_xxe_in_a_document(tmp_path) -> None:
     doc = f"<!DOCTYPE r [{SPLIT_COMMENT_SUBSET.format(path=canary)}]><r>&x;</r>".encode()
     with pytest.raises(SecurityError):
         parse_xml(doc, "r.xml")
+
+
+def _mock_network(monkeypatch: pytest.MonkeyPatch, handler) -> None:
+    monkeypatch.setattr(security, "_resolve_all_addrs", lambda host: ["93.184.216.34"])
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        security.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw)
+    )
+
+
+def test_a_dripping_server_hits_the_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mock_network(monkeypatch, lambda request: httpx.Response(200, content=iter([b"<x", b"/>"])))
+    monkeypatch.setattr(settings, "fetch_deadline_seconds", -1)
+    with pytest.raises(SecurityError, match="too slow"):
+        fetch_url("https://example.org/a.xml")
+
+
+def test_urls_with_userinfo_are_refused() -> None:
+    with pytest.raises(SecurityError, match="user name or password"):
+        _verify_url("https://u:p@example.org/a.xml")

@@ -14,6 +14,7 @@ import ipaddress
 import logging
 import re
 import socket
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -230,6 +231,8 @@ def _verify_url(url: str) -> tuple[str, str]:
     host = parsed.host
     if not host:
         raise SecurityError(f"URL has no host: {url!r}")
+    if parsed.userinfo:
+        raise SecurityError("URLs with a user name or password are not supported")
     if not _host_is_allowed(host):
         raise SecurityError(
             f"host {host!r} is not on ALLOWED_SCHEMA_HOSTS lockdown whitelist"
@@ -245,9 +248,10 @@ def _verify_url(url: str) -> tuple[str, str]:
     return host, addrs[0]
 
 
-def _read_capped(response: httpx.Response) -> bytes:
+def _read_capped(response: httpx.Response, deadline: float) -> bytes:
     """Read a streamed response body, aborting once the size cap is exceeded so
-    a malicious server cannot exhaust memory before the check."""
+    a malicious server cannot exhaust memory before the check, or at
+    ``deadline`` (a server dripping bytes resets httpx's per-read timeout forever)."""
     cap = settings.fetch_max_response_bytes
     chunks: list[bytes] = []
     total = 0
@@ -257,6 +261,8 @@ def _read_capped(response: httpx.Response) -> bytes:
             raise SecurityError(
                 f"response exceeds {settings.fetch_max_response_mb} MB cap"
             )
+        if time.monotonic() > deadline:
+            raise SecurityError("the server is too slow; giving up")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -267,6 +273,7 @@ def fetch_url(url: str) -> FetchedResource:
     safe), redirect cap with re-validation, and a streamed response-size cap."""
     remaining_redirects = settings.fetch_max_redirects
     current = normalize_url(url)
+    deadline = time.monotonic() + settings.fetch_deadline_seconds
     with httpx.Client(
         follow_redirects=False,
         timeout=settings.fetch_timeout_seconds,
@@ -297,7 +304,7 @@ def fetch_url(url: str) -> FetchedResource:
                     raise SecurityError(
                         f"fetching {host!r} failed with HTTP {response.status_code}"
                     )
-                content = _read_capped(response)
+                content = _read_capped(response, deadline)
                 content_type = response.headers.get("content-type")
             logger.info(
                 "fetched remote resource",
