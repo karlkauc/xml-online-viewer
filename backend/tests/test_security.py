@@ -7,6 +7,7 @@ import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
+from lxml import etree
 
 from app.config import settings
 from app.main import app
@@ -252,3 +253,30 @@ def test_fetch_url_checks_a_scheme_less_host(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(security, "_resolve_all_addrs", lambda host: ["10.0.0.5"])
     with pytest.raises(SecurityError, match="'internal.example.com' resolves to a private"):
         fetch_url("internal.example.com/x.xml")
+
+
+SPLIT_COMMENT_SUBSET = '<!ENTITY a "<!--"><!ENTITY x SYSTEM "file://{path}"><!ENTITY b "-->">'
+
+
+def test_comment_split_across_entity_values_is_rejected(tmp_path) -> None:
+    canary = tmp_path / "canary.txt"
+    canary.write_text("CANARY-SECRET")
+    doc = f"<!DOCTYPE r [{SPLIT_COMMENT_SUBSET.format(path=canary)}]><r>&x;</r>".encode()
+    with pytest.raises(SecurityError):
+        inspect_dtd(doc)
+
+
+def test_internal_entity_parser_never_reads_external_entities(tmp_path) -> None:
+    canary = tmp_path / "canary.txt"
+    canary.write_text("CANARY-SECRET")
+    doc = f'<!DOCTYPE r [<!ENTITY x SYSTEM "file://{canary}">]><r>&x;</r>'.encode()
+    with pytest.raises(etree.XMLSyntaxError):
+        etree.fromstring(doc, security.make_parser(internal_entities=True))
+
+
+def test_comment_split_xxe_in_a_document(tmp_path) -> None:
+    canary = tmp_path / "canary.txt"
+    canary.write_text("CANARY-SECRET")
+    doc = f"<!DOCTYPE r [{SPLIT_COMMENT_SUBSET.format(path=canary)}]><r>&x;</r>".encode()
+    with pytest.raises(SecurityError):
+        parse_xml(doc, "r.xml")

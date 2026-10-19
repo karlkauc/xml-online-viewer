@@ -104,7 +104,7 @@ def pretty_print(xml_bytes: bytes) -> bytes:
     # the output then carries their values, so later parses need not resolve.
     parser = etree.XMLParser(
         remove_blank_text=True,
-        resolve_entities=inspect_dtd(xml_bytes),
+        resolve_entities="internal" if inspect_dtd(xml_bytes) else False,
         no_network=True,
         load_dtd=False,
         huge_tree=False,
