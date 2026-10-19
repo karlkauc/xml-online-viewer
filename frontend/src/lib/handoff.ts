@@ -1,24 +1,38 @@
 /**
- * Receive an XML file handed over from the sibling XSD viewer.
+ * Receive a file handed over from a sibling viewer.
  *
- * Flow: xsd-viewer.online opens `https://www.xml-viewer.online/?from=xsd-viewer`
+ * Flow: xsd-viewer.online or odata-viewer.online opens
+ * `https://www.xml-viewer.online/?from=xsd-viewer` (or `from=odata-viewer`)
  * in a new tab while keeping the File in memory. Once mounted we post
  * `{type: "xml-viewer:ready"}` to the opener; it answers with
  * `{type: "xml-viewer:file", name, content}` (content is a transferred
  * ArrayBuffer), optionally with `schema: {name, content, mainFilename}` — the
  * schema loaded over there as a single .xsd or a ZIP of all its files — so
- * the document can be validated right away. Origins are checked strictly on
- * both sides; without the `from` parameter nothing here runs.
+ * the document can be validated right away. The XSD viewer can also send
+ * `{type: "xml-viewer:schema", schema}` alone ("validate an XML file against
+ * this schema"): the schema is loaded and the visitor adds the document.
+ * Origins are checked strictly on both sides; without the `from` parameter
+ * nothing here runs.
  */
 
-export const HANDOFF_SOURCE = "xsd-viewer";
+export const HANDOFF_SOURCES = ["xsd-viewer", "odata-viewer"] as const;
+export type HandoffSource = (typeof HANDOFF_SOURCES)[number];
 
-// Keep in step with HANDOFF_SENDER_ORIGINS in the XSD viewer (lib/xmlViewerHandoff.ts).
+// Keep in step with HANDOFF_SENDER_ORIGINS in the XSD viewer and the OData
+// viewer (lib/xmlViewerHandoff.ts in both).
 const SENDER_ORIGINS = [
   "https://www.xsd-viewer.online",
   "https://xsd-viewer.online",
   "https://viewer.status20.net",
+  "https://www.odata-viewer.online",
+  "https://odata-viewer.online",
+  "https://odata-viewer.status20.net",
 ];
+
+export const HANDOFF_LABELS: Record<HandoffSource, string> = {
+  "xsd-viewer": "XSD Viewer",
+  "odata-viewer": "OData Viewer",
+};
 
 export interface HandoffSchema {
   name: string;
@@ -46,8 +60,13 @@ function isAllowedOrigin(origin: string): boolean {
   return import.meta.env.DEV && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 
+export function handoffSource(search: string = window.location.search): HandoffSource | null {
+  const from = new URLSearchParams(search).get("from");
+  return (HANDOFF_SOURCES as readonly string[]).includes(from ?? "") ? (from as HandoffSource) : null;
+}
+
 export function isHandoffLanding(search: string = window.location.search): boolean {
-  return new URLSearchParams(search).get("from") === HANDOFF_SOURCE;
+  return handoffSource(search) !== null;
 }
 
 function isSchema(data: unknown): data is HandoffSchema {
@@ -71,6 +90,17 @@ function isFileMessage(data: unknown): data is HandoffFileMessage {
   );
 }
 
+export interface HandoffSchemaMessage {
+  type: "xml-viewer:schema";
+  schema: HandoffSchema;
+}
+
+function isSchemaMessage(data: unknown): data is HandoffSchemaMessage {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  return d.type === "xml-viewer:schema" && isSchema(d.schema);
+}
+
 function schemaFile(schema: HandoffSchema): HandoffSchemaFile {
   const lower = schema.name.toLowerCase();
   const type = lower.endsWith(".zip") ? "application/zip" : lower.endsWith(".xsd") ? "application/xml" : "";
@@ -79,16 +109,22 @@ function schemaFile(schema: HandoffSchema): HandoffSchemaFile {
 
 /**
  * Announce readiness to the opener and resolve the handed-over File (plus
- * the schema, when one came along). Returns a cleanup function; `onFile` is
- * called at most once.
+ * the schema, when one came along), or the schema alone (`file` null).
+ * Returns a cleanup function; `onFile` is called at most once.
  */
-export function receiveHandoff(onFile: (file: File, schema?: HandoffSchemaFile) => void): () => void {
+export function receiveHandoff(onFile: (file: File | null, schema?: HandoffSchemaFile) => void): () => void {
   const opener = window.opener as Window | null;
   if (!opener) return () => {};
 
   let done = false;
   const onMessage = (event: MessageEvent) => {
     if (done || event.source !== opener || !isAllowedOrigin(event.origin)) return;
+    if (isSchemaMessage(event.data)) {
+      done = true;
+      window.removeEventListener("message", onMessage);
+      onFile(null, schemaFile(event.data.schema));
+      return;
+    }
     if (!isFileMessage(event.data)) return;
     done = true;
     window.removeEventListener("message", onMessage);

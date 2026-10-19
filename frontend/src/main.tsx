@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import "@xyflow/react/dist/style.css";
 import App from "./App";
+import { ReportView } from "./components/ReportView";
+
+const isReportRoute = window.location.pathname.replace(/\/+$/, "") === "/report";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -11,6 +14,6 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    {isReportRoute ? <ReportView /> : <App />}
   </React.StrictMode>,
 );

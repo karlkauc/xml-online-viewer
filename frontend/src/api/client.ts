@@ -1,4 +1,5 @@
 import type {
+  ValidationErrorItem,
   ValidationResponse,
   XmlDocModel,
   XsdInfo,
@@ -211,6 +212,34 @@ export async function runValidation(
 
 export function excelReportUrl(validationId: string): string {
   return `${API_BASE}/validate/${validationId}/excel`;
+}
+
+export interface SharedReportExcel {
+  xml_filename: string;
+  xsd_filename: string;
+  is_valid: boolean;
+  errors: ValidationErrorItem[];
+}
+
+/** Excel for a report opened from a share link (the server has no document for it). */
+export async function downloadSharedReportExcel(report: SharedReportExcel): Promise<void> {
+  const response = await fetch(`${API_BASE}/validate/report/excel`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(report),
+  });
+  if (!response.ok) throw new ApiError(`Excel export failed (HTTP ${response.status})`, response.status);
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "validation_report_shared.xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Count a copied share link (the copy itself never reaches the server). Fire and forget. */
+export function pingShare(source: "url" | "report"): void {
+  void fetch(`${API_BASE}/usage/share?source=${source}`, { method: "POST", keepalive: true }).catch(() => undefined);
 }
 
 // --- FundsXML releases (GitHub) ------------------------------------------

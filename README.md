@@ -1,5 +1,7 @@
 # XML Online Viewer
 
+[![Try it live](https://img.shields.io/badge/try%20it%20live-xml--viewer.online-2563eb)](https://www.xml-viewer.online/?utm_source=github&utm_medium=readme)
+
 **Read your XML, validate it against any XSD, and export the errors to Excel —
 right in your browser. No install, no account, nothing stored.**
 
@@ -68,6 +70,25 @@ your FundsXML document and validate.
 - **No account, no login.** Just open the site and drop a file.
 - **You can run it yourself.** The whole app is a single Docker container — see
   [docs/TECHNICAL.md](docs/TECHNICAL.md) for self-hosting.
+
+## Share results
+
+- **A link to the document:** for files loaded by URL, *Share* copies
+  `https://www.xml-viewer.online/?url=…&xsd=…`, which loads and validates them again.
+- **A link to the error list:** *Share report* puts the validation errors — not the document — into
+  the link itself; nothing is stored on the server. Open it to see the list or download the Excel report.
+- **What does an error mean?** Each error links to an explanation with causes and fixes, e.g.
+  [cvc-complex-type.2.4.a](https://www.xml-viewer.online/errors/element-not-expected).
+
+## Self-host with Docker
+
+Keep files inside your network:
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/karlkauc/xml-online-viewer:latest
+```
+
+Then open <http://localhost:8080>. Configuration: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## No warranty
 

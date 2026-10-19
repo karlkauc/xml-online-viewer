@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchHealth } from "../api/client";
-import { EVENT_OPEN_ABOUT, FUNDSXML_URL, GITHUB_REPO_URL, XSD_VIEWER_URL, openFeedback, FREEXMLTOOLKIT_GO, SPONSOR_GO } from "../lib/links";
+import { EVENT_OPEN_ABOUT, FUNDSXML_URL, GITHUB_REPO_URL, openFeedback, FREEXMLTOOLKIT_GO, SPONSOR_GO } from "../lib/links";
+import { FamilyFooter } from "./FamilyFooter";
 
 /**
  * Modal "About" dialog. Opened from anywhere via `openAbout()` (lib/links) —
@@ -102,10 +103,7 @@ export function AboutDialog() {
             </button>
           </li>
           <li>
-            <a className={linkClass} href={XSD_VIEWER_URL} target="_blank" rel="noopener noreferrer">
-              XSD Viewer
-            </a>
-            {" — sister tool for reading and understanding XML Schemas"}
+            <FamilyFooter />
           </li>
           <li>
             <a className={linkClass} href={FUNDSXML_URL} target="_blank" rel="noopener noreferrer">

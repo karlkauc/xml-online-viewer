@@ -17,6 +17,11 @@ export default defineConfig({
   // needed; the layout under test is CSS-driven, not engine-specific.
   projects: [
     {
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: /mobile\.spec\.ts/,
+    },
+    {
       name: "phone",
       use: { ...devices["iPhone 13"], browserName: "chromium" },
       testMatch: /mobile\.spec\.ts/,

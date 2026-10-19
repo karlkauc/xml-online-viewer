@@ -75,6 +75,10 @@ interface AppState {
   xmlDoc: XmlDocModel | null;
   xsdInfo: XsdInfo | null;
   xsdSource: XsdSource | null;
+  /** Public URLs the document / schema were loaded from, for share links and
+   * "open in the XSD Viewer"; null for uploads and pasted text. */
+  xmlUrl: string | null;
+  xsdUrl: string | null;
   validation: ValidationResponse | null;
   errorsByNodeId: Map<string, ValidationErrorItem[]>;
   descendantErrorCounts: Map<string, number>;
@@ -85,8 +89,8 @@ interface AppState {
   viewMode: "tree" | "diagram";
   minimapVisible: boolean;
 
-  setXml: (doc: XmlDocModel) => void;
-  setXsd: (info: XsdInfo, origin?: XsdSource) => void;
+  setXml: (doc: XmlDocModel, url?: string | null) => void;
+  setXsd: (info: XsdInfo, origin?: XsdSource, url?: string | null) => void;
   clearXsd: () => void;
   setValidation: (result: ValidationResponse) => void;
   clearValidation: () => void;
@@ -103,6 +107,8 @@ export const useApp = create<AppState>((set, get) => ({
   xmlDoc: null,
   xsdInfo: null,
   xsdSource: null,
+  xmlUrl: null,
+  xsdUrl: null,
   validation: null,
   errorsByNodeId: new Map(),
   descendantErrorCounts: new Map(),
@@ -113,12 +119,13 @@ export const useApp = create<AppState>((set, get) => ({
   viewMode: "diagram",
   minimapVisible: false,
 
-  setXml: (doc) =>
+  setXml: (doc, url = null) =>
     set({
       xmlDoc: doc,
+      xmlUrl: url,
       // A new document invalidates an auto-detected schema (it was derived
       // from the previous one); a manual pick is kept.
-      ...(get().xsdSource === "auto" ? { xsdInfo: null, xsdSource: null } : {}),
+      ...(get().xsdSource === "auto" ? { xsdInfo: null, xsdSource: null, xsdUrl: null } : {}),
       // Expand only the root, so the first level (root + direct children) is
       // visible and everything below stays collapsed.
       expandedIds: new Set([doc.root.id]),
@@ -128,10 +135,11 @@ export const useApp = create<AppState>((set, get) => ({
       descendantErrorCounts: new Map(),
     }),
 
-  setXsd: (info, origin = "manual") =>
+  setXsd: (info, origin = "manual", url = null) =>
     set({
       xsdInfo: info,
       xsdSource: origin,
+      xsdUrl: url,
       validation: null,
       errorsByNodeId: new Map(),
       descendantErrorCounts: new Map(),
@@ -141,6 +149,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({
       xsdInfo: null,
       xsdSource: null,
+      xsdUrl: null,
       validation: null,
       errorsByNodeId: new Map(),
       descendantErrorCounts: new Map(),

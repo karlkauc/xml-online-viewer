@@ -49,6 +49,16 @@ env vars, Cloud Armor rate limiting, VPC egress and image scanning) lives in
 | `CACHE_MAX_ENTRIES` | `64` | Cache size per type (XML / XSD / validation) |
 | `CORS_ALLOW_ORIGINS` | *(empty)* | Only set if a foreign frontend calls the API |
 | `LOG_LEVEL` | `INFO` | Log level |
+| `INDEXNOW_KEY` | *(empty)* | Served as `/<key>.txt` for IndexNow; `tools/indexnow_ping.py` submits the sitemap |
+
+## Content pages and links
+
+The backend also serves plain HTML pages that need no JavaScript (`backend/app/content`): the
+validation-error explanations under `/errors/…` (linked from every error and the Excel report),
+`/features/…` and `/validate/…`. `/sitemap.xml` is generated from the SPA routes and these pages.
+
+Links into the app: `/?url=<xml>&xsd=<xsd>` loads both by URL; `/report#z.…` shows a shared error
+list that lives entirely in the URL fragment.
 
 ## Security model
 
@@ -71,6 +81,9 @@ infrastructure-level backstops (Cloud Armor, VPC egress).
 | POST | `/api/fundsxml/releases/{tag}/load` | Load a schema from a release |
 | POST | `/api/validate` | `{xml_id, xsd_id}` → validation result |
 | GET | `/api/validate/{validation_id}/excel` | Download Excel report |
+| POST | `/api/validate/report/excel` | Excel for a shared report (`/report#…`): `{xml_filename, xsd_filename, is_valid, errors}`, ≤ 500 errors |
+| GET | `/api/content/faq` | Home FAQ (same source as the static shell) |
+| POST | `/api/usage/share?source=url\|report` | Counts a copied share link |
 | GET | `/api/health` | Liveness |
 
 ## Local development

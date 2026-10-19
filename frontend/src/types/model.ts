@@ -59,6 +59,8 @@ export interface ValidationErrorItem {
   domain: string | null;
   path: string | null;
   node_id: string | null;
+  /** Help page /errors/<slug> for this kind of error (backend app/report/error_catalog.py). */
+  help_slug?: string | null;
 }
 
 export interface ValidationResponse {

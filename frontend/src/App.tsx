@@ -10,12 +10,14 @@ import {
   uploadXsdUrl,
   loadXsdFromRelease,
   listFundsXmlReleases,
+  pingShare,
   type FundsXmlRelease,
 } from "./api/client";
 import type { XmlDocModel, XsdInfo } from "./types/model";
 import { useApp } from "./stores/appStore";
-import { isHandoffLanding, receiveHandoff } from "./lib/handoff";
+import { HANDOFF_LABELS, handoffSource, receiveHandoff } from "./lib/handoff";
 import { DesktopAppCard } from "./components/DesktopAppCard";
+import { FamilyFooter } from "./components/FamilyFooter";
 import clsx from "clsx";
 import { Uploader } from "./components/Uploader";
 import { XmlTreeView } from "./components/XmlTreeView/XmlTreeView";
@@ -31,7 +33,8 @@ import { useDismiss } from "./lib/useDismiss";
 import {
   FUNDSXML_SAMPLE_URL,
   GITHUB_REPO_URL,
-  XSD_VIEWER_URL,
+  ODATA_VIEWER_GO,
+  XSD_VIEWER_GO,
   openAbout,
   openFeedback,
   openSearch, FREEXMLTOOLKIT_GO, SPONSOR_GO } from "./lib/links";
@@ -39,8 +42,10 @@ import {
 // Stable landing route fundsxml.org can link to: opens the XSD loader on the
 // FundsXML Releases tab and auto-loads the newest release's schema.
 const isFundsXmlRoute = window.location.pathname.replace(/\/+$/, "") === "/fundsxml";
-// Opened from xsd-viewer.online with an XML file to hand over (see lib/handoff).
-const isHandoff = isHandoffLanding();
+// Opened from xsd-viewer.online or odata-viewer.online with a file to hand over (see lib/handoff).
+const handoffFrom = handoffSource();
+const isHandoff = handoffFrom !== null;
+const handoffLabel = handoffFrom ? HANDOFF_LABELS[handoffFrom] : "";
 
 /** Why auto-detection did not end with a loaded schema: either the document
  * points at a schema on the user's own disk ("local"), or the download failed. */
@@ -121,8 +126,8 @@ export default function App() {
   // through here, so auto-detection of the schema behaves identically for all
   // of them and the validation panel picks it up on its own.
   const applyXml = useCallback(
-    async (doc: XmlDocModel) => {
-      setXml(doc);
+    async (doc: XmlDocModel, url: string | null = null) => {
+      setXml(doc, url);
       setAutoSchema(null);
       // A fresh document opens on the view, not the validation panel. On
       // phones the loaders would otherwise leave no room for it; read the
@@ -140,7 +145,7 @@ export default function App() {
         return;
       }
       try {
-        setXsd(await autoLoadXsd(doc.xml_id), "auto");
+        setXsd(await autoLoadXsd(doc.xml_id), "auto", usable.resolved_url);
       } catch (err) {
         setAutoSchema({
           kind: "error",
@@ -153,17 +158,17 @@ export default function App() {
 
   const onXmlFile = useCallback(async (f: File) => applyXml(await uploadXmlFile(f)), [applyXml]);
   const onXmlText = useCallback(async (c: string) => applyXml(await uploadXmlText(c)), [applyXml]);
-  const onXmlUrl = useCallback(async (u: string) => applyXml(await uploadXmlUrl(u)), [applyXml]);
+  const onXmlUrl = useCallback(async (u: string) => applyXml(await uploadXmlUrl(u), u), [applyXml]);
   const onXmlSample = useCallback(
-    async () => applyXml(await uploadXmlUrl(FUNDSXML_SAMPLE_URL)),
+    async () => applyXml(await uploadXmlUrl(FUNDSXML_SAMPLE_URL), FUNDSXML_SAMPLE_URL),
     [applyXml],
   );
   // A schema the user loaded by hand. On phones the open loaders would push
   // the document and the validation result off screen, so Files collapses
   // once the load succeeded (the summary row keeps both filenames visible).
   const applyXsd = useCallback(
-    (info: XsdInfo) => {
-      setXsd(info);
+    (info: XsdInfo, url: string | null = null) => {
+      setXsd(info, "manual", url);
       if (!matchesMediaQuery(MD_QUERY)) setFilesOpen(false);
     },
     [setXsd],
@@ -173,7 +178,7 @@ export default function App() {
     [applyXsd],
   );
   const onXsdText = useCallback(async (c: string) => applyXsd(await uploadXsdText(c)), [applyXsd]);
-  const onXsdUrl = useCallback(async (u: string) => applyXsd(await uploadXsdUrl(u)), [applyXsd]);
+  const onXsdUrl = useCallback(async (u: string) => applyXsd(await uploadXsdUrl(u), u), [applyXsd]);
   const onXsdRelease = useCallback(
     async (tag: string, filename: string) => applyXsd(await loadXsdFromRelease(tag, filename)),
     [applyXsd],
@@ -202,6 +207,50 @@ export default function App() {
     })();
   }, [xsdInfo, setXsd]);
 
+  // ?url=<xml>[&xsd=<schema>] on arrival: what the Share button copies. Public
+  // http(s) URLs only; the backend fetches them with its SSRF guard.
+  const arrived = useRef(false);
+  const [arrival, setArrival] = useState<string | null>(null);
+  useEffect(() => {
+    if (arrived.current || isHandoff) return;
+    arrived.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const xml = params.get("url");
+    const xsd = params.get("xsd");
+    const isHttp = (u: string | null): u is string => !!u && /^https?:\/\//i.test(u);
+    if (!isHttp(xml)) return;
+    void (async () => {
+      try {
+        if (isHttp(xsd)) await onXsdUrl(xsd);
+        await onXmlUrl(xml);
+      } catch (err) {
+        setArrival(err instanceof ApiError ? err.message : String(err));
+      }
+    })();
+  }, [onXmlUrl, onXsdUrl]);
+
+  const xmlUrl = useApp((s) => s.xmlUrl);
+  const xsdUrl = useApp((s) => s.xsdUrl);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const shareUrl = useMemo(() => {
+    if (!xmlUrl) return null;
+    const params = new URLSearchParams({ url: xmlUrl });
+    // An auto-detected schema comes back on its own; only a manual pick rides along.
+    if (xsdUrl && xsdSource === "manual") params.set("xsd", xsdUrl);
+    return `${window.location.origin}/?${params.toString()}`;
+  }, [xmlUrl, xsdUrl, xsdSource]);
+  const copyShareLink = useCallback(async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      window.prompt("Copy this link:", shareUrl);
+    }
+    pingShare("url");
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2500);
+  }, [shareUrl]);
+
   // Landing from the XSD viewer: announce readiness, then load the posted
   // file as if the user had uploaded it here — and the schema, when the
   // sender attached one, so validation starts on its own. Falls back to
@@ -209,6 +258,21 @@ export default function App() {
   useEffect(() => {
     if (!isHandoff) return;
     const cleanup = receiveHandoff((file, schema) => {
+      if (!file) {
+        // Schema only ("validate an XML file against this schema"): load it and
+        // leave the XML loader open for the document.
+        if (!schema) return;
+        setHandoff({ status: "loading", detail: schema.file.name });
+        void uploadXsdFiles([schema.file], schema.mainFilename)
+          .then((info) => {
+            applyXsd(info);
+            setFilesOpen(true);
+            setHandoff(null);
+            window.history.replaceState(null, "", window.location.pathname);
+          })
+          .catch((err) => setHandoff({ status: "error", detail: err instanceof Error ? err.message : String(err) }));
+        return;
+      }
       setHandoff({ status: "loading", detail: file.name });
       void uploadXmlFile(file)
         .then(async (doc) => {
@@ -234,13 +298,32 @@ export default function App() {
   // below `lg`, so the header stays a single row on phones.
   const secondaryActions = useMemo<HeaderAction[]>(
     () => [
+      ...(shareUrl
+        ? [
+            {
+              key: "share",
+              label: linkCopied ? "Link copied ✓" : "🔗 Share",
+              title: "Copy a link that loads this document (and schema) from its URL",
+              ariaLabel: "Copy share link",
+              onClick: () => void copyShareLink(),
+            },
+          ]
+        : []),
       { key: "feedback", label: "💬 Feedback", title: "Send feedback", ariaLabel: "Send feedback", onClick: openFeedback },
       {
         key: "xsd-viewer",
         label: "XSD Viewer ↗",
         title: "Have an XML Schema instead? Open our sister tool XSD Viewer",
         ariaLabel: "Open XSD Viewer (sister tool for XML Schemas)",
-        href: XSD_VIEWER_URL,
+        href: XSD_VIEWER_GO,
+        external: true,
+      },
+      {
+        key: "odata-viewer",
+        label: "OData Viewer ↗",
+        title: "Sister tool for OData services: $metadata as tree, ER diagram and live data",
+        ariaLabel: "Open OData Viewer (sister tool for OData services)",
+        href: ODATA_VIEWER_GO,
         external: true,
       },
       {
@@ -262,7 +345,7 @@ export default function App() {
       { key: "github", label: "GitHub", title: "Source code on GitHub", ariaLabel: "Source code on GitHub", href: GITHUB_REPO_URL, external: true },
       { key: "about", label: "ℹ️ About", title: "About this app", ariaLabel: "About this app", onClick: openAbout },
     ],
-    [],
+    [shareUrl, linkCopied, copyShareLink],
   );
 
   return (
@@ -286,7 +369,7 @@ export default function App() {
             <span aria-hidden="true">🔍</span>
             <span className="hidden sm:inline">Search</span>
           </button>
-          <HeaderActions actions={secondaryActions} inline={wide} />
+          <HeaderActions actions={secondaryActions} />
           <ThemeToggle />
         </div>
       </header>
@@ -319,9 +402,14 @@ export default function App() {
                 : "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300",
             )}
           >
-            {handoff.status === "waiting" && "Receiving file from XSD Viewer…"}
+            {handoff.status === "waiting" && `Receiving file from ${handoffLabel}…`}
             {handoff.status === "loading" && `Loading ${handoff.detail}…`}
-            {handoff.status === "error" && `Could not load the file from XSD Viewer: ${handoff.detail}`}
+            {handoff.status === "error" && `Could not load the file from ${handoffLabel}: ${handoff.detail}`}
+          </p>
+        )}
+        {arrival && (
+          <p role="alert" className="mx-4 mt-2 rounded px-3 py-1.5 text-xs bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300">
+            Could not load the linked file: {arrival}
           </p>
         )}
         {filesOpen && (
@@ -406,7 +494,7 @@ export default function App() {
                 Have an XML Schema (.xsd) instead?{" "}
                 <a
                   className="underline underline-offset-2"
-                  href={XSD_VIEWER_URL}
+                  href={XSD_VIEWER_GO}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -421,6 +509,7 @@ export default function App() {
                   "Sign documents, generate PDFs, query with XPath/XQuery — all offline",
                 ]}
               />
+              <FamilyFooter className="mt-6 text-xs text-slate-500 dark:text-slate-400" />
             </div>
             </div>
           </div>

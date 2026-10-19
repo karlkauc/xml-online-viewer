@@ -8,12 +8,12 @@ import time
 from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api._common import _ms, reject
 from app.cache import validation_cache, xml_cache, xsd_cache
-from app.parser.validate import ValidationResponse, validate
+from app.parser.validate import ValidationErrorItem, ValidationResponse, validate
 from app.parser.xsd_store import XsdError
 from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 from app.report.excel import build_report
@@ -23,6 +23,18 @@ from app.usage.events import truncate
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["validate"])
+
+
+# A shared report (/report#…) carries its errors in the link; the cap keeps a
+# crafted link from turning into a large workbook.
+MAX_SHARED_ERRORS = 500
+
+
+class SharedReportPayload(BaseModel):
+    xml_filename: str = Field("document.xml", max_length=255)
+    xsd_filename: str = Field("schema.xsd", max_length=255)
+    is_valid: bool = False
+    errors: list[ValidationErrorItem] = Field(default_factory=list, max_length=MAX_SHARED_ERRORS)
 
 
 class ValidatePayload(BaseModel):
@@ -127,4 +139,27 @@ async def download_excel(request: Request, validation_id: str) -> StreamingRespo
         iter([data]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/validate/report/excel")
+@limiter.limit(WRITE_LIMIT)
+async def shared_report_excel(request: Request, payload: SharedReportPayload) -> Response:
+    """Excel for a report opened from a share link: no document on the server, so no context lines.
+
+    A plain Response, not streaming: after the buffered POST body the replayed
+    receive() reports a disconnect, which would cancel a StreamingResponse.
+    """
+    for item in payload.errors:
+        item.message = item.message[:2000]
+        item.path = item.path[:1000] if item.path else None
+    emit("export", source="excel_shared", error_count=len(payload.errors), status="ok", status_code=200)
+    result = ValidationResponse(
+        xml_id="", xsd_id="", is_valid=payload.is_valid and not payload.errors, errors=payload.errors
+    )
+    data = build_report(result, xml_filename=payload.xml_filename, xsd_filename=payload.xsd_filename)
+    return Response(
+        data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="validation_report_shared.xlsx"'},
     )

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
-import { ApiError, excelReportUrl, runValidation } from "../api/client";
+import { ApiError, excelReportUrl, pingShare, runValidation } from "../api/client";
+import { reportLink } from "../lib/reportLink";
+import { XSD_VIEWER_URL } from "../lib/links";
 import { DesktopAppCard } from "./DesktopAppCard";
 import { useApp } from "../stores/appStore";
 import type { Severity } from "../types/model";
@@ -25,8 +27,10 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
   const setValidation = useApp((s) => s.setValidation);
   const setSelected = useApp((s) => s.setSelected);
   const selectedNodeId = useApp((s) => s.selectedNodeId);
+  const xsdUrl = useApp((s) => s.xsdUrl);
 
   const [busy, setBusy] = useState(false);
+  const [shared, setShared] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canValidate = !!xmlDoc && !!xsdInfo;
@@ -52,6 +56,25 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
   useEffect(() => {
     if (xmlId && xsdId) void validate();
   }, [xmlId, xsdId, validate]);
+
+  // The link carries the error list (never the document) in its fragment; the
+  // messages may still quote values, so ask first.
+  const shareReport = useCallback(async () => {
+    if (!validation || !xmlDoc || !xsdInfo) return;
+    const ok = window.confirm(
+      "Copy a link to this validation report?\n\nThe link contains the error list — messages can quote values from your file — but not the file itself. Nothing is stored on the server.",
+    );
+    if (!ok) return;
+    const link = await reportLink({ xmlFilename: xmlDoc.filename, xsdFilename: xsdInfo.main_filename, isValid: validation.is_valid, errors: validation.errors });
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      window.prompt("Copy this link:", link);
+    }
+    pingShare("report");
+    setShared(true);
+    window.setTimeout(() => setShared(false), 2500);
+  }, [validation, xmlDoc, xsdInfo]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -91,6 +114,11 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
             ⬇ Excel report
           </a>
         )}
+        {validation && (
+          <button type="button" className="btn" onClick={() => void shareReport()} title="Copy a link to this error list (without the document)">
+            {shared ? "Link copied ✓" : "🔗 Share report"}
+          </button>
+        )}
 
         {validation && (
           <span
@@ -108,6 +136,18 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
         )}
       </div>
 
+      {xsdUrl && /^https?:\/\//i.test(xsdUrl) && (
+        <p className="px-3 py-1.5 text-xs border-b border-slate-200 dark:border-slate-800">
+          <a
+            className="text-accent hover:underline"
+            href={`${XSD_VIEWER_URL}url?src=${encodeURIComponent(xsdUrl)}&utm_source=xml-viewer&utm_medium=sister`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View this schema as a diagram in the XSD Viewer ↗
+          </a>
+        </p>
+      )}
       {!canValidate && (
         <p className="p-3 text-sm text-slate-500">
           Load XML data and an XSD schema to validate.
@@ -154,6 +194,17 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
                     )}
                   </div>
                   <p className="text-slate-700 dark:text-slate-300">{err.message}</p>
+                  {err.help_slug && (
+                    <a
+                      className="text-xs text-accent hover:underline"
+                      href={`/errors/${err.help_slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      What does this mean?
+                    </a>
+                  )}
                   {err.path && (
                     <p className="font-mono text-[11px] text-slate-400 truncate mt-0.5">
                       {err.path}

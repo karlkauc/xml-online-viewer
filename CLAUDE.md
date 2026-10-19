@@ -13,10 +13,23 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   schema_fetch, validate), `api/` (xml, xsd, validate, releases, feedback,
   `_common.py` with `reject()`), `report/excel.py`, `usage/` (anonymous usage
   events + feedback store, ported from the XSD viewer), `cache.py`, `config.py`,
-  `main.py`.
+  `main.py`, `spa.py` (SPA shell with per-route meta `ROUTE_META` — `/`, `/fundsxml`, `/report`
+  (noindex) — `/sitemap.xml`, `/<INDEXNOW_KEY>.txt`, the home FAQ via `<!--faq-->` markers).
+- `backend/app/content/` — server-rendered Markdown pages without JS (SEO): `pages/**/*.md` with
+  TOML front matter between `+++` (`/errors/<slug>`, `/features/…`, `/validate/…`), `faq.toml`,
+  `site.py` (per-site constants, FreeXmlToolkit family list); the rest is shared with the XSD and
+  OData viewers — keep it in step. `app/report/error_catalog.py` maps libxml2 `type_name`s to the
+  `/errors/<slug>` pages (each names the Xerces `cvc-*` code); errors carry `help_slug`, the
+  Excel report a Help column. Every slug in `HELP` needs its page (tested).
 - `frontend/src/` — SPA: `components/` (Uploader, XmlTreeView, DiagramView,
   ValidationPanel, FundsXmlReleases), `stores/appStore.ts`, `api/client.ts`.
 - `docs/DEPLOY_CLOUD_RUN.md` — hardening/deploy reference.
+- **Links in and out.** `?url=<xml>[&xsd=<xsd>]` loads both on arrival (the header's Share
+  copies it for URL-loaded documents). `/report#z.…` is a validation result shared without the
+  document: `lib/reportLink.ts` deflates the error list into the fragment, `ReportView.tsx`
+  shows it, `POST /api/validate/report/excel` turns it into a workbook (strings starting with
+  `=` stay text). `lib/handoff.ts` receives files from `?from=xsd-viewer` and `?from=odata-viewer`
+  (`xml-viewer:file`, or `xml-viewer:schema` with a schema only).
 - Header/dialogs (Search, Feedback, XSD Viewer link, GitHub, About, theme)
   mirror the XSD viewer; shared links/events live in `frontend/src/lib/links.ts`.
 - **XML-first workflow.** The XSD panel is disabled until an XML document is
@@ -71,9 +84,13 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
 - **Usage statistics** (`docs/USAGE_STATS.md`): off unless `USAGE_DB_URL` is
   set. `app_version` is `release_version()`: the package version plus
   Cloud Run's `K_REVISION`, so deploys can be told apart. Routers call `emit("xml_load"|"xsd_load"|"validate"|"export", …)`,
-  `spa_fallback` (`mount_spa()`) emits `page_view` only for routes in `SPA_ROUTES`
-  (`/`, `/fundsxml`) — every other unknown path is a 404 without event, so add new
-  client-side routes there; rows land in `usage_event`
+  `spa_fallback` (`app/spa.py`) emits `page_view` only for routes in `ROUTE_META`
+  and content pages — every other unknown path is a 404 without event, so add new
+  client-side routes there; page views keep `utm_source`/`utm_medium`/`utm_campaign` (slugs),
+  share buttons ping `POST /api/usage/share` (event `share`, source url|report), and
+  `/go/xsd-viewer`, `/go/odata-viewer` count clicks to the sister sites (adding
+  `utm_source=xml-viewer`). New columns must exist in the DB before deploying (the insert names
+  every column); rows land in `usage_event`
   (`backend/sql/usage_stats.sql`, same columns as the XSD viewer). Rejections
   go through `_common.reject()` so nothing is emitted twice.
 - `POST /api/feedback` stores to Postgres when `USAGE_DB_URL` (or the override
