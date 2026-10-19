@@ -105,7 +105,8 @@ image. `e2e/` also holds the bare `playwright` used by `scripts/record_demo.mjs`
 ## Deployment — Google Cloud Run
 
 - **Public site:** **https://www.xml-viewer.online/** (apex
-  <https://xml-viewer.online/> also mapped), Cloud Run service
+  <https://xml-viewer.online/> also mapped; `main.py` redirects it to `SITE_ORIGIN`,
+  301 for GET/HEAD, 308 otherwise), Cloud Run service
   `xml-online-viewer` in project **`xml-viewer-online`**, region
   `europe-west1`. Managed TLS via Cloud Run domain mappings.
 - The repo also publishes an image to GHCR via CI
