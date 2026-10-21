@@ -21,6 +21,7 @@ import { useApp } from "../../stores/appStore";
 import { buildDiagramGraph, NODE_WIDTH } from "./buildGraph";
 import { XmlElementNode } from "./XmlElementNode";
 import { exportFlowAsPng, exportFlowAsSvg } from "./exportImage";
+import { pingFeature } from "../../api/client";
 import { computeAnchoredViewport } from "./anchorViewport";
 import { DiagramToolbar, type ExportFormat } from "./DiagramToolbar";
 import { initialFitOptions } from "./fitOptions";
@@ -233,6 +234,7 @@ function DiagramInner() {
         } else {
           await exportFlowAsPng(viewportEl, exportNodes, { filename: "xml-diagram.png" });
         }
+        pingFeature(format === "svg" ? "diagram_svg" : "diagram_png");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         alert(`${format.toUpperCase()} export failed: ${msg}`);

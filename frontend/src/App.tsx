@@ -10,6 +10,7 @@ import {
   uploadXsdUrl,
   loadXsdFromRelease,
   listFundsXmlReleases,
+  pingFeature,
   pingShare,
   type FundsXmlRelease,
 } from "./api/client";
@@ -109,6 +110,7 @@ export default function App() {
   const openTreeSearch = useCallback(() => {
     setViewMode("tree");
     setValidationOpen(false);
+    pingFeature("search_open", { once: true });
     // XmlTreeView owns the listener and may only mount in the next commit
     // (coming from the diagram or the phone's Validation pane).
     requestAnimationFrame(() => openSearch());
@@ -122,6 +124,7 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        pingFeature("search_open", { once: true });
         openSearch();
       }
     };

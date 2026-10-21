@@ -20,7 +20,7 @@ One row per event in table `usage_event` (DDL: `backend/sql/usage_stats.sql`):
 
 | Column | Meaning |
 |---|---|
-| `event_type` | `page_view` (SPA shell or content page served), `xml_load`, `xsd_load`, `validate`, `export` (`source` = `excel`, or `excel_shared` for a report opened from a link), `share` (`source` = `url` or `report`) |
+| `event_type` | `page_view` (SPA shell or content page served), `xml_load`, `xsd_load`, `validate`, `export` (`source` = `excel`, or `excel_shared` for a report opened from a link), `share` (`source` = `url` or `report`), `feature` (a browser-only feature was used, pinged via `POST /api/usage/feature?name=`: `source` = `diagram_png`, `diagram_svg`, `search_open`; `search_open` at most once per page load; unknown names get a 400 and no row) |
 | `visitor_hash` | `sha256(daily_salt ‖ ip ‖ user-agent)[:32]`; salt = `HMAC(USAGE_HASH_SECRET, date)` ⇒ same visitor within a day, unlinkable across days, not reversible |
 | `country_code` | ISO-3166-1 alpha-2 derived server-side via MaxMind GeoLite2; NULL if unknown |
 | `user_agent`, `device` | UA string (≤255) and a cheap classification `desktop`/`mobile`/`bot`/`unknown` |
@@ -150,6 +150,9 @@ SELECT schema_name, count(*) FROM usage_event WHERE event_type='xsd_load' GROUP 
 -- Countries, referrers, devices
 SELECT country_code, count(DISTINCT visitor_hash) FROM usage_event WHERE device<>'bot' GROUP BY 1 ORDER BY 2 DESC;
 SELECT referrer, count(*) FROM usage_event WHERE event_type='page_view' GROUP BY 1 ORDER BY 2 DESC LIMIT 25;
+
+-- Browser-only features (diagram export, search palette, …)
+SELECT source, count(*), count(DISTINCT visitor_hash) FROM usage_event WHERE event_type='feature' AND device<>'bot' GROUP BY 1 ORDER BY 2 DESC;
 
 -- Size watch
 SELECT pg_size_pretty(pg_total_relation_size('usage_event')), count(*) FROM usage_event;
