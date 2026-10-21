@@ -104,6 +104,7 @@ def ingest_xsd(
         if isinstance(exc, AmbiguousMainError):
             raise MainSchemaChoice(str(exc), exc.candidates) from exc
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    stored.source = source
     info = _finalize(stored)
     emit(
         "xsd_load",

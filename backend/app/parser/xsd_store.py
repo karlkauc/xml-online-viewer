@@ -46,6 +46,9 @@ class StoredXsd:
     main_filename: str
     # Relative POSIX path -> raw file bytes.
     files: dict[str, bytes]
+    # How the schema arrived (upload/text/url/auto/release); set by the API on
+    # ingest so ``validate`` usage events can tell found from uploaded schemas.
+    source: str | None = None
 
 
 # ---------------------------------------------------------------------------

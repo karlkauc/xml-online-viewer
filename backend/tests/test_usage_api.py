@@ -104,7 +104,7 @@ def test_full_flow_validate_and_export(client: TestClient, recorder: ListRecorde
     assert kinds == [
         ("xsd_load", "text", "ok"),
         ("xml_load", "text", "ok"),
-        ("validate", None, "invalid"),
+        ("validate", "text", "invalid"),
         ("export", "excel", "ok"),
         ("export", "excel", "rejected"),
     ]
@@ -121,6 +121,16 @@ def test_valid_document_status_ok(client: TestClient, recorder: ListRecorder) ->
     client.post("/api/validate", json={"xml_id": xml_id, "xsd_id": xsd_id})
     ev = recorder.events[-1]
     assert ev.event_type == "validate" and ev.status == "ok" and ev.error_count == 0
+
+
+def test_validate_carries_the_source_of_the_schema(client: TestClient, recorder: ListRecorder) -> None:
+    xsd_id = client.post(
+        "/api/xsd/upload", files={"file": ("person.xsd", XSD.encode(), "application/xml")}
+    ).json()["xsd_id"]
+    xml_id = client.post("/api/xml/text", json={"content": VALID_XML}).json()["xml_id"]
+    client.post("/api/validate", json={"xml_id": xml_id, "xsd_id": xsd_id})
+    ev = recorder.events[-1]
+    assert (ev.event_type, ev.source, ev.schema_name) == ("validate", "upload", "person.xsd")
 
 
 def test_xml_url_rejected(client: TestClient, recorder: ListRecorder) -> None:

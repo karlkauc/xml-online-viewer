@@ -68,7 +68,7 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
     except XsdError as exc:
         emit(
             "validate",
-            source=None,
+            source=stored_xsd.source,
             schema_name=schema_name,
             input_bytes=input_bytes,
             duration_ms=_ms(started),
@@ -102,7 +102,7 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
     )
     emit(
         "validate",
-        source=None,
+        source=stored_xsd.source,
         schema_name=schema_name,
         input_bytes=input_bytes,
         error_count=len(result.errors),
