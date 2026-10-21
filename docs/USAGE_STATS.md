@@ -38,7 +38,8 @@ One row per event in table `usage_event` (DDL: `backend/sql/usage_stats.sql`):
 | `app_version`, `received_at` | build version, server timestamp |
 
 Status semantics: `rejected` = size limit, SSRF guard, unknown/expired cache
-id or unknown release; `parse_error` = malformed XML / XSD compile error;
+id or unknown release, and a `validate` whose cached schema cannot be set up
+for validation (422); `parse_error` = malformed XML / XSD compile error on load;
 `invalid` = validation ran and found errors.
 
 Not tracked: `GET /api/xml/{id}` (cache read) and the FundsXML release

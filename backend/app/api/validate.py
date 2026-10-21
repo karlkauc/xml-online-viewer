@@ -66,17 +66,18 @@ async def run_validation(request: Request, payload: ValidatePayload) -> Validati
     try:
         result = validate(stored_xml, stored_xsd)
     except XsdError as exc:
-        emit(
+        # The schema cannot be set up for validation (not the document's
+        # fault): recorded as a rejection like in the XSD viewer; parse_error
+        # stays reserved for XML/XSD load failures.
+        raise reject(
             "validate",
-            source=stored_xsd.source,
+            stored_xsd.source,
+            422,
+            str(exc),
             schema_name=schema_name,
             input_bytes=input_bytes,
             duration_ms=_ms(started),
-            status="parse_error",
-            status_code=422,
-            error_detail=str(exc),
-        )
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        ) from exc
 
     validation_id = hashlib.sha256(
         f"{payload.xml_id}:{payload.xsd_id}".encode()

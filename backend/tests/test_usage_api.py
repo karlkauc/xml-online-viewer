@@ -133,6 +133,26 @@ def test_validate_carries_the_source_of_the_schema(client: TestClient, recorder:
     assert (ev.event_type, ev.source, ev.schema_name) == ("validate", "upload", "person.xsd")
 
 
+def test_validate_setup_error_is_rejected_not_parse_error(
+    client: TestClient, recorder: ListRecorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import validate as validate_api
+    from app.parser.xsd_store import XsdError
+
+    def broken(*_args: object) -> None:
+        raise XsdError("schema main file is unavailable; cannot validate")
+
+    xsd_id = client.post("/api/xsd/text", json={"content": XSD, "filename": "person.xsd"}).json()["xsd_id"]
+    xml_id = client.post("/api/xml/text", json={"content": VALID_XML}).json()["xml_id"]
+    monkeypatch.setattr(validate_api, "validate", broken)
+    r = client.post("/api/validate", json={"xml_id": xml_id, "xsd_id": xsd_id})
+    assert r.status_code == 422
+    ev = recorder.events[-1]
+    assert (ev.event_type, ev.source, ev.status, ev.status_code) == ("validate", "text", "rejected", 422)
+    assert ev.schema_name == "person.xsd" and ev.input_bytes and ev.duration_ms is not None
+    assert ev.error_detail and "cannot validate" in ev.error_detail
+
+
 def test_xml_url_rejected(client: TestClient, recorder: ListRecorder) -> None:
     r = client.post("/api/xml/url", json={"url": "http://127.0.0.1/x.xml?s=1"})
     assert r.status_code == 400
