@@ -2,7 +2,7 @@
 title = "FundsXML validator: validate FundsXML 4 files online against the official schema"
 heading = "Validate FundsXML files online"
 description = "Check FundsXML 4 documents against the official schema release: automatic schema detection, every error with line and path, Excel report for the data supplier, all releases from fundsxml/schema built in."
-lastmod = 2026-10-19
+lastmod = 2026-10-21
 cta_label = "Validate a FundsXML file"
 cta_href = "/fundsxml"
 +++
@@ -28,3 +28,6 @@ To validate against another release, pick it under **XSD schema → FundsXML Rel
   [duplicate key or missing reference](/errors/duplicate-key-or-missing-reference).
 
 To read the schema itself as a diagram, open it in the [XSD Viewer](https://www.xsd-viewer.online/fundsxml).
+
+Working with Solvency II look-through data? The [TPT ⇄ FundsXML Converter](/go/tpt-converter) turns FinDatEx TPT
+V7/V8 files into FundsXML 4 and back.

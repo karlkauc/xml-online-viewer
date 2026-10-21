@@ -35,6 +35,7 @@ import {
   FUNDSXML_SAMPLE_URL,
   GITHUB_REPO_URL,
   ODATA_VIEWER_GO,
+  TPT_CONVERTER_GO,
   XSD_VIEWER_GO,
   openAbout,
   openFeedback,
@@ -337,6 +338,14 @@ export default function App() {
         title: "Sister tool for OData services: $metadata as tree, ER diagram and live data",
         ariaLabel: "Open OData Viewer (sister tool for OData services)",
         href: ODATA_VIEWER_GO,
+        external: true,
+      },
+      {
+        key: "tpt-converter",
+        label: "TPT Converter ↗",
+        title: "Sister tool: convert Solvency II TPT (V7/V8) to FundsXML 4 and back",
+        ariaLabel: "Open TPT ⇄ FundsXML Converter (sister tool)",
+        href: TPT_CONVERTER_GO,
         external: true,
       },
       {
