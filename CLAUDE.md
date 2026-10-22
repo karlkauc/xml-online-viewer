@@ -31,7 +31,7 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   copies it for URL-loaded documents). `/report#z.…` is a validation result shared without the
   document: `lib/reportLink.ts` deflates the error list into the fragment, `ReportView.tsx`
   shows it, `POST /api/validate/report/excel` turns it into a workbook (strings starting with
-  `=` stay text). `lib/handoff.ts` receives files from `?from=xsd-viewer` and `?from=odata-viewer`
+  `=` stay text). `lib/handoff.ts` receives files from `?from=xsd-viewer`, `?from=odata-viewer` and `?from=tpt-converter`
   (`xml-viewer:file`, or `xml-viewer:schema` with a schema only).
 - Header/dialogs (Search, Feedback, XSD Viewer link, GitHub, About, theme)
   mirror the XSD viewer; shared links/events live in `frontend/src/lib/links.ts`.

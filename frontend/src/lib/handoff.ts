@@ -1,8 +1,9 @@
 /**
  * Receive a file handed over from a sibling viewer.
  *
- * Flow: xsd-viewer.online or odata-viewer.online opens
- * `https://www.xml-viewer.online/?from=xsd-viewer` (or `from=odata-viewer`)
+ * Flow: xsd-viewer.online, odata-viewer.online or the TPT converter opens
+ * `https://www.xml-viewer.online/?from=xsd-viewer` (or `from=odata-viewer`,
+ * `from=tpt-converter`)
  * in a new tab while keeping the File in memory. Once mounted we post
  * `{type: "xml-viewer:ready"}` to the opener; it answers with
  * `{type: "xml-viewer:file", name, content}` (content is a transferred
@@ -15,11 +16,11 @@
  * nothing here runs.
  */
 
-export const HANDOFF_SOURCES = ["xsd-viewer", "odata-viewer"] as const;
+export const HANDOFF_SOURCES = ["xsd-viewer", "odata-viewer", "tpt-converter"] as const;
 export type HandoffSource = (typeof HANDOFF_SOURCES)[number];
 
-// Keep in step with HANDOFF_SENDER_ORIGINS in the XSD viewer and the OData
-// viewer (lib/xmlViewerHandoff.ts in both).
+// Keep in step with HANDOFF_SENDER_ORIGINS in the XSD viewer, the OData
+// viewer (lib/xmlViewerHandoff.ts in both) and the TPT converter (lib/handoff.ts).
 const SENDER_ORIGINS = [
   "https://www.xsd-viewer.online",
   "https://xsd-viewer.online",
@@ -27,11 +28,13 @@ const SENDER_ORIGINS = [
   "https://www.odata-viewer.online",
   "https://odata-viewer.online",
   "https://odata-viewer.status20.net",
+  "https://converter.status20.net",
 ];
 
 export const HANDOFF_LABELS: Record<HandoffSource, string> = {
   "xsd-viewer": "XSD Viewer",
   "odata-viewer": "OData Viewer",
+  "tpt-converter": "TPT Converter",
 };
 
 export interface HandoffSchema {

@@ -44,7 +44,7 @@ import {
 // Stable landing route fundsxml.org can link to: opens the XSD loader on the
 // FundsXML Releases tab and auto-loads the newest release's schema.
 const isFundsXmlRoute = window.location.pathname.replace(/\/+$/, "") === "/fundsxml";
-// Opened from xsd-viewer.online or odata-viewer.online with a file to hand over (see lib/handoff).
+// Opened from xsd-viewer.online, odata-viewer.online or the TPT converter with a file to hand over (see lib/handoff).
 const handoffFrom = handoffSource();
 const isHandoff = handoffFrom !== null;
 const handoffLabel = handoffFrom ? HANDOFF_LABELS[handoffFrom] : "";
