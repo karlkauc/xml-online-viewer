@@ -29,5 +29,5 @@ To validate against another release, pick it under **XSD schema → FundsXML Rel
 
 To read the schema itself as a diagram, open it in the [XSD Viewer](https://www.xsd-viewer.online/fundsxml).
 
-Working with Solvency II look-through data? The [TPT ⇄ FundsXML Converter](/go/tpt-converter) turns FinDatEx TPT
+Working with Solvency II look-through data? The [Fund Data Converter](/go/tpt-converter) turns FinDatEx TPT
 V7/V8 files into FundsXML 4 and back.

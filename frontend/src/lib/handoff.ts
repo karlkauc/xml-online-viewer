@@ -1,7 +1,7 @@
 /**
  * Receive a file handed over from a sibling viewer.
  *
- * Flow: xsd-viewer.online, odata-viewer.online or the TPT converter opens
+ * Flow: xsd-viewer.online, odata-viewer.online or the Fund Data Converter opens
  * `https://www.xml-viewer.online/?from=xsd-viewer` (or `from=odata-viewer`,
  * `from=tpt-converter`)
  * in a new tab while keeping the File in memory. Once mounted we post
@@ -20,7 +20,7 @@ export const HANDOFF_SOURCES = ["xsd-viewer", "odata-viewer", "tpt-converter"] a
 export type HandoffSource = (typeof HANDOFF_SOURCES)[number];
 
 // Keep in step with HANDOFF_SENDER_ORIGINS in the XSD viewer, the OData
-// viewer (lib/xmlViewerHandoff.ts in both) and the TPT converter (lib/handoff.ts).
+// viewer (lib/xmlViewerHandoff.ts in both) and the Fund Data Converter (lib/handoff.ts).
 const SENDER_ORIGINS = [
   "https://www.xsd-viewer.online",
   "https://xsd-viewer.online",
@@ -28,13 +28,14 @@ const SENDER_ORIGINS = [
   "https://www.odata-viewer.online",
   "https://odata-viewer.online",
   "https://odata-viewer.status20.net",
-  "https://converter.status20.net",
+  "https://www.fund-data-converter.eu",
+  "https://converter.status20.net", // old address of the Fund Data Converter, while it redirects
 ];
 
 export const HANDOFF_LABELS: Record<HandoffSource, string> = {
   "xsd-viewer": "XSD Viewer",
   "odata-viewer": "OData Viewer",
-  "tpt-converter": "TPT Converter",
+  "tpt-converter": "Fund Data Converter",
 };
 
 export interface HandoffSchema {

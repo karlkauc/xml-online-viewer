@@ -44,7 +44,7 @@ import {
 // Stable landing route fundsxml.org can link to: opens the XSD loader on the
 // FundsXML Releases tab and auto-loads the newest release's schema.
 const isFundsXmlRoute = window.location.pathname.replace(/\/+$/, "") === "/fundsxml";
-// Opened from xsd-viewer.online, odata-viewer.online or the TPT converter with a file to hand over (see lib/handoff).
+// Opened from xsd-viewer.online, odata-viewer.online or the Fund Data Converter with a file to hand over (see lib/handoff).
 const handoffFrom = handoffSource();
 const isHandoff = handoffFrom !== null;
 const handoffLabel = handoffFrom ? HANDOFF_LABELS[handoffFrom] : "";
@@ -342,9 +342,9 @@ export default function App() {
       },
       {
         key: "tpt-converter",
-        label: "TPT Converter ↗",
+        label: "Fund Data Converter ↗",
         title: "Sister tool: convert Solvency II TPT (V7/V8) to FundsXML 4 and back",
-        ariaLabel: "Open TPT ⇄ FundsXML Converter (sister tool)",
+        ariaLabel: "Open Fund Data Converter (sister tool)",
         href: TPT_CONVERTER_GO,
         external: true,
       },
