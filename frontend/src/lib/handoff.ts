@@ -29,7 +29,7 @@ const SENDER_ORIGINS = [
   "https://odata-viewer.online",
   "https://odata-viewer.status20.net",
   "https://www.fund-data-converter.eu",
-  "https://converter.status20.net", // old address of the Fund Data Converter, while it redirects
+  "https://converter.status20.net", // test instance of the Fund Data Converter
 ];
 
 export const HANDOFF_LABELS: Record<HandoffSource, string> = {
