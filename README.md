@@ -3,7 +3,7 @@
 [![Try it live](https://img.shields.io/badge/try%20it%20live-xml--viewer.online-2563eb)](https://www.xml-viewer.online/?utm_source=github&utm_medium=readme)
 
 **Read your XML, validate it against any XSD, and export the errors to Excel —
-right in your browser. No install, no account, nothing stored.**
+right in your browser. No install, no account, files not stored.**
 
 Open <https://www.xml-viewer.online> and drop in an `.xml` file. You get a
 collapsible tree and an interactive diagram of your data side by side with a
@@ -64,9 +64,9 @@ your FundsXML document and validate.
 
 ## Your data stays with you
 
-- **Nothing is stored.** Files are parsed in memory and dropped from a
-  short-lived cache. There is no database, no file persistence, and no analytics
-  on your documents.
+- **Your files are not stored.** Files are parsed in memory and dropped from a
+  short-lived cache. The public site keeps pseudonymous usage statistics; see
+  `/privacy` and `docs/USAGE_STATS.md`.
 - **No account, no login.** Just open the site and drop a file.
 - **You can run it yourself.** The whole app is a single Docker container — see
   [docs/TECHNICAL.md](docs/TECHNICAL.md) for self-hosting.

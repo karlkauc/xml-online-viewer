@@ -144,7 +144,7 @@ export function FeedbackDialog() {
             )}
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Stored without your IP address; file contents are never sent.
+                Stored without your raw IP address; file contents are never sent.
               </p>
               <button type="submit" className="btn btn-primary" disabled={status.kind === "sending" || !message.trim()}>
                 {status.kind === "sending" ? "Sending…" : "Send"}

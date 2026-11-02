@@ -19,8 +19,9 @@ error line and the line after, and a link to an explanation of the error. See [E
 [[faq]]
 q = "Are my files stored?"
 a = """
-No. Files are parsed in memory and dropped from a short-lived cache; nothing is written to disk and document
-content never reaches the usage statistics. To keep files inside your network,
+No. Files are parsed in memory and dropped from a short-lived cache; nothing is written to disk. The usage
+statistics record the file name or URL, size and outcome, and the error message of a failed load, which can quote a
+short piece of the file; see the [privacy policy](/privacy). To keep files inside your network,
 [run the viewer with Docker](https://github.com/karlkauc/xml-online-viewer#self-host-with-docker).
 """
 

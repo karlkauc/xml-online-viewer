@@ -1,10 +1,12 @@
-# Anonymous usage statistics
+# Usage statistics
 
-The public site records **aggregate, anonymous** usage so the viewer can be
+The public site records **pseudonymous** usage so the viewer can be
 improved based on real use: how many people load XML documents and schemas,
 from where, how big they are, how long parsing/validation takes and how often
-it fails. Document/schema **content is never stored**, and the raw client IP
-is neither stored nor logged.
+it fails. Document/schema **files are never stored**; a failed load's error message can quote a
+fragment. The application neither stores nor logs the raw client IP; Cloud Run's request logs do (30 days,
+`_Default` log bucket). The public statement is `backend/app/content/pages/privacy.md`: change it together with
+what is collected.
 
 The feature is **off by default** — it only activates when `USAGE_DB_URL` is
 set. Self-hosted installs without it record nothing.

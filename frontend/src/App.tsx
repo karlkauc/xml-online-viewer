@@ -485,7 +485,7 @@ export default function App() {
             <div className="max-w-lg text-center">
               <h2 className="text-xl font-semibold mb-2">Start with an XML file</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-                Drop it into <strong>XML data</strong> above — nothing is stored, and no account
+                Drop it into <strong>XML data</strong> above — your file is not stored, and no account
                 is needed.
               </p>
               <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1.5 mb-5 text-left inline-block">

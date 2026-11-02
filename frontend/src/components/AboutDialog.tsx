@@ -132,8 +132,8 @@ export function AboutDialog() {
         </ul>
 
         <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-          Uploaded files are parsed in memory and dropped after a short cache period. File contents
-          are never stored.
+          Uploaded files are parsed in memory and dropped after a short cache period. Files are
+          never written to disk.
         </p>
       </div>
     </div>

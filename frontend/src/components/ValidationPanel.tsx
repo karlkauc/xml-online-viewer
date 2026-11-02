@@ -62,7 +62,7 @@ export function ValidationPanel({ onPick, onClose }: ValidationPanelProps = {}) 
   const shareReport = useCallback(async () => {
     if (!validation || !xmlDoc || !xsdInfo) return;
     const ok = window.confirm(
-      "Copy a link to this validation report?\n\nThe link contains the error list — messages can quote values from your file — but not the file itself. Nothing is stored on the server.",
+      "Copy a link to this validation report?\n\nThe link contains the error list — messages can quote values from your file — but not the file itself. The report is not stored on the server.",
     );
     if (!ok) return;
     const link = await reportLink({ xmlFilename: xmlDoc.filename, xsdFilename: xsdInfo.main_filename, isValid: validation.is_valid, errors: validation.errors });
