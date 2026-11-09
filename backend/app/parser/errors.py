@@ -157,6 +157,26 @@ def syntax_message(exc: Exception | str) -> str:
     return f"{message} — {hint}" if hint else message
 
 
+_MISPLACED_DECL_MARKER = "XML declaration allowed only at the start of the document"
+
+
+def misplaced_declaration_context(message: str, content: bytes) -> str:
+    """For lxml's "XML declaration allowed only at the start", quote what
+    precedes the ``<?xml`` so the visitor sees what to delete. Empty otherwise."""
+    if _MISPLACED_DECL_MARKER not in message:
+        return ""
+    at = content.find(b"<?xml", 1)
+    if at <= 0:
+        return ""
+    before = content[:at].decode("utf-8", "replace").lstrip("\ufeff").strip()
+    if not before:
+        return ""
+    before = " ".join(before.split())
+    if len(before) > 60:
+        before = before[:57] + "…"
+    return f" (before it: {before!r})"
+
+
 def humanize_syntax_error(exc: etree.XMLSyntaxError, content: bytes) -> str:
     """Describe a well-formedness failure of ``content`` (the document's bytes).
 
@@ -177,7 +197,8 @@ def humanize_syntax_error(exc: etree.XMLSyntaxError, content: bytes) -> str:
         if head[:1] in (b"{", b"["):
             return f"not an XML file — it looks like JSON (it starts with {head!r} instead of '<')"
         return f"not an XML file (it starts with {head!r} instead of '<')"
-    return f"XML is not well-formed: {syntax_message(exc)}"
+    message = syntax_message(exc)
+    return f"XML is not well-formed: {message}{misplaced_declaration_context(message, content)}"
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +209,10 @@ def humanize_syntax_error(exc: etree.XMLSyntaxError, content: bytes) -> str:
 # The spec requires ``<?xml`` at byte 0, and lxml enforces that; real-world
 # files frequently violate it with a stray leading newline.
 _LEADING_WS_BEFORE_DECL_RE = re.compile(rb"\A(?:\xef\xbb\xbf)?\s+(?=<\?xml)")
+
+# The declaration written twice (a template's header plus the pasted document's
+# own): everything up to the last of the leading declarations goes.
+_REPEATED_DECL_RE = re.compile(rb"\A(?:\xef\xbb\xbf)?\s*(?:<\?xml\s[^>]*\?>\s*)+(?=<\?xml\s)")
 
 # A Markdown code fence around the document — what a chat assistant's answer
 # looks like when copied wholesale.
@@ -247,6 +272,13 @@ def clean_input(content: bytes) -> tuple[bytes, list[str]]:
         notices.append(
             "This is a copy of the browser's rendered XML view; its banner and fold markers "
             "('-') were removed. 'View page source' (Ctrl+U) shows the file itself."
+        )
+    repeated = _REPEATED_DECL_RE.match(content)
+    if repeated is not None:
+        content = content[repeated.end() :]
+        notices.append(
+            "The XML declaration (<?xml …?>) appeared more than once at the top; only the last "
+            "one was kept. A document may carry a single declaration, as its very first line."
         )
     match = _LEADING_WS_BEFORE_DECL_RE.match(content)
     if match is not None:

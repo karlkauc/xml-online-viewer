@@ -90,7 +90,7 @@ def emit(event_type: str, **fields: Any) -> bool:
             visitor_hash=visitor_hash(ctx.ip, ctx.user_agent, _utc_today(), tracker.hash_secret),
             country_code=tracker.geoip.country(ctx.ip) if tracker.geoip else None,
             user_agent=truncate(ctx.user_agent),
-            device=classify_device(ctx.user_agent),
+            device=classify_device(ctx.user_agent, ctx.referrer),
             app_version=release_version(),
             referrer=clean_referrer(ctx.referrer),
             **fields,

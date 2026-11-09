@@ -138,6 +138,7 @@ def test_xml_node_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> 
     r = client.post("/api/xml/text", json={"content": xml, "filename": "x.xml"})
     assert r.status_code == 400
     assert "node limit" in r.json()["detail"]
+    assert "has 4 nodes" in r.json()["detail"]
 
 
 # --- ZIP hardening ----------------------------------------------------------

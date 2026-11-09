@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from lxml import etree
 
 from app.config import settings
-from app.parser.errors import humanize_syntax_error, syntax_message
+from app.parser.errors import humanize_syntax_error, misplaced_declaration_context, syntax_message
 from app.parser.security import inspect_dtd, make_parser
 
 
@@ -314,9 +314,9 @@ def build_xmlschema(stored: StoredXsd) -> etree.XMLSchema:
         except etree.XMLSyntaxError as exc:
             if not main_bytes.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"<"):
                 raise XsdError(humanize_syntax_error(exc, main_bytes)) from exc
-            raise XsdError(
-                f"schema could not be parsed: {syntax_message(_scrub(exc, tmp_root))}"
-            ) from exc
+            message = syntax_message(_scrub(exc, tmp_root))
+            context = misplaced_declaration_context(message, main_bytes)
+            raise XsdError(f"schema could not be parsed: {message}{context}") from exc
 
 
 def _scrub(exc: Exception, tmp_root: Path) -> str:

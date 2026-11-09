@@ -71,6 +71,13 @@ class TestDevice:
         assert classify_device("") == "unknown"
         assert classify_device(None) == "unknown"
 
+    def test_wordpress_referrer_marks_a_scanner(self) -> None:
+        chrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/150.0.0.0 Safari/537.36"
+        assert classify_device(chrome, "http://xml-viewer.online/wp-admin/") == "bot"
+        assert classify_device(chrome, "https://example.org/wp-login.php") == "bot"
+        assert classify_device(chrome, "https://www.bing.com/") == "desktop"
+        assert classify_device(chrome, None) == "desktop"
+
     def test_current_safari_stays_human(self) -> None:
         iphone = (
             "Mozilla/5.0 (iPhone; CPU iPhone OS {} like Mac OS X) "

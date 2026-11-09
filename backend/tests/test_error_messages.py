@@ -78,8 +78,15 @@ def test_collapsed_browser_view_cannot_be_restored() -> None:
         (b"```xml\n<a><b><c/></b></a>\n```\n", "Markdown code fence"),
         (b"\n  <?xml version='1.0'?><a><b><c/></b></a>", "Leading whitespace"),
         (b"\xef\xbb\xbf\n<?xml version='1.0'?><a><b><c/></b></a>", "Leading whitespace"),
+        (
+            b'<?xml version="1.0" encoding="UTF-8"?>\n<?xml version="1.0"?>\n<a><b><c/></b></a>',
+            "more than once",
+        ),
     ],
-    ids=["banner", "fold-markers", "after-declaration", "fence", "whitespace", "bom-whitespace"],
+    ids=[
+        "banner", "fold-markers", "after-declaration", "fence", "whitespace", "bom-whitespace",
+        "repeated-declaration",
+    ],
 )
 def test_wrappers_are_removed_with_a_notice(data: bytes, needle: str) -> None:
     model = parse_xml(data, "doc.xml").model
@@ -266,3 +273,18 @@ def test_loose_files_share_the_upload_size_limit(client: TestClient, monkeypatch
 def test_zip_without_a_schema_says_so() -> None:
     with pytest.raises(XsdError, match=r"contains no \.xsd file \(found: readme\.txt\)"):
         load_xsd(zip_bytes=_zip({"readme.txt": b"hi"}), main_filename=None, main_bytes=None)
+
+
+def test_misplaced_declaration_quotes_what_precedes_it() -> None:
+    msg = _message(b"<!-- LID export 2026-05-02 -->\n<?xml version='1.0'?><a/>")
+    assert "XML declaration allowed only at the start" in msg
+    assert "(before it: '<!-- LID export 2026-05-02 -->')" in msg
+
+
+def test_misplaced_declaration_in_schema_is_quoted() -> None:
+    xsd = (
+        b"<!-- generated -->\n<?xml version='1.0'?>"
+        b"<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'/>"
+    )
+    with pytest.raises(XsdError, match=r"before it: '<!-- generated -->'"):
+        load_xsd(zip_bytes=None, main_filename="s.xsd", main_bytes=xsd)

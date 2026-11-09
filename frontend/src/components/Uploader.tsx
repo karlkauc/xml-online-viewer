@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { COARSE_POINTER_QUERY, useMediaQuery } from "../lib/useMediaQuery";
 import { ApiError } from "../api/client";
 import { FundsXmlReleases } from "./FundsXmlReleases";
-import { XSD_VIEWER_URL } from "../lib/links";
+import { XSD_VIEWER_URL, openFeedback } from "../lib/links";
 
 type Mode = "file" | "text" | "url" | "releases";
 
@@ -26,6 +26,12 @@ function looksLikeSchema(filename?: string, text?: string): boolean {
   if (filename && /\.xsd(\?|#|$)/i.test(filename)) return true;
   return !!text && SCHEMA_ROOT_RE.test(text.slice(0, 1024));
 }
+
+/** What was last handed to the loader, so it can be passed on elsewhere. */
+export type LoaderInput = { kind: "file"; file: File } | { kind: "text"; text: string } | { kind: "url"; url: string };
+
+// The backend's answer when an instance document lands in the XSD loader.
+const XML_IN_SCHEMA_SLOT_RE = /not an XSD schema: this is an XML document/;
 
 interface SourceLoaderProps {
   title: string;
@@ -57,6 +63,9 @@ interface SourceLoaderProps {
   statusNote?: ReactNode;
   // When set, an ✕ button next to the status line unloads the current input.
   onClear?: () => void;
+  // When set and the server says the input is an XML document rather than a
+  // schema, offer to load that same input as the document instead.
+  onLoadAsXml?: (input: LoaderInput) => Promise<void>;
 }
 
 /** A single load surface (file / paste / URL) for either XML or XSD input. */
@@ -78,6 +87,7 @@ function SourceLoader({
   rejectSchemaInput,
   statusNote,
   onClear,
+  onLoadAsXml,
 }: SourceLoaderProps) {
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [busy, setBusy] = useState(false);
@@ -90,6 +100,7 @@ function SourceLoader({
   // Finger input has no drag-and-drop; say so instead of inviting a drop.
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const lastInput = useRef<LoaderInput | null>(null);
 
   // A document may also be loaded from outside this panel (the empty-state
   // example button, the xsd-viewer handoff). Drop a stale mix-up warning once
@@ -129,6 +140,7 @@ function SourceLoader({
   const loadFiles = useCallback(
     (files: File[], mainFilename?: string) => {
       if (files.length === 0) return;
+      lastInput.current = files.length === 1 ? { kind: "file", file: files[0] } : null;
       if (!mainFilename) setChoice(null);
       guarded(async () => {
         try {
@@ -280,7 +292,10 @@ function SourceLoader({
               type="button"
               className="btn btn-primary mt-2"
               disabled={busy || disabled || !text.trim()}
-              onClick={() => guarded(() => onText(text), undefined, text)}
+              onClick={() => {
+                lastInput.current = { kind: "text", text };
+                guarded(() => onText(text), undefined, text);
+              }}
             >
               Load
             </button>
@@ -300,7 +315,10 @@ function SourceLoader({
               type="button"
               className="btn btn-primary mt-2"
               disabled={busy || disabled || !url.trim()}
-              onClick={() => guarded(() => onUrl(url.trim()), url.trim())}
+              onClick={() => {
+                lastInput.current = { kind: "url", url: url.trim() };
+                guarded(() => onUrl(url.trim()), url.trim());
+              }}
             >
               Load
             </button>
@@ -335,9 +353,31 @@ function SourceLoader({
         </p>
       )}
       {!disabled && error && (
-        <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
-          {error}
-        </p>
+        <div className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
+          <p>{error}</p>
+          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            {onLoadAsXml && lastInput.current && XML_IN_SCHEMA_SLOT_RE.test(error) && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => {
+                  const input = lastInput.current;
+                  if (input) void run(() => onLoadAsXml(input));
+                }}
+              >
+                Load it as the XML document instead
+              </button>
+            )}
+            <button
+              type="button"
+              className="underline underline-offset-2 text-slate-500 dark:text-slate-400 hover:text-accent"
+              onClick={() => openFeedback({ errorDetail: `${title}: ${error}` })}
+            >
+              Think this is wrong? Report it
+            </button>
+          </p>
+        </div>
       )}
       {!disabled && !error && !schemaMixUp && !busy && status && (
         <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 flex-wrap">
@@ -409,6 +449,13 @@ export function Uploader(props: UploaderProps) {
         disabled={props.xsdDisabled}
         disabledHint="Load an XML file first — a schema is only used to validate it."
         statusNote={props.xsdStatusNote}
+        onLoadAsXml={(input) =>
+          input.kind === "file"
+            ? props.onXmlFile(input.file)
+            : input.kind === "text"
+              ? props.onXmlText(input.text)
+              : props.onXmlUrl(input.url)
+        }
         multiple
       />
     </div>

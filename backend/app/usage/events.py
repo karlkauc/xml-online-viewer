@@ -25,6 +25,9 @@ _MIN_ENGINE_VERSION = 100
 # sends "Version/N … Safari/"; Chrome/Firefox on iOS (CriOS/FxiOS) and Android WebViews do not.
 _SAFARI_VERSION_RE = re.compile(r"\bVersion/(\d+)[\d.]* (?:Mobile/\S+ )?Safari/")
 _MIN_SAFARI_VERSION = 15
+# A Referer on a WordPress admin/login page of *this* site: no such page exists here, so
+# whoever sends it is a vulnerability scanner walking a wordlist, whatever its UA says.
+_SCANNER_REFERRER_RE = re.compile(r"/(?:wp-admin|wp-login|wp-includes|wp-content|xmlrpc\.php)", re.IGNORECASE)
 _MOBILE_RE = re.compile(r"Mobile|Android|iPhone|iPad|iPod|Windows Phone|Opera Mini", re.IGNORECASE)
 
 
@@ -93,7 +96,9 @@ def visitor_hash(ip: str | None, user_agent: str | None, day: date, secret: str)
     return digest[:32]
 
 
-def classify_device(user_agent: str | None) -> str:
+def classify_device(user_agent: str | None, referrer: str | None = None) -> str:
+    if referrer and _SCANNER_REFERRER_RE.search(referrer):
+        return "bot"
     if not user_agent or not user_agent.strip():
         return "unknown"
     # Every real browser sends "Mozilla/5.0 (…"; bare tool names are scripts and probes.

@@ -42,8 +42,10 @@ from app.parser.xsd_store import (
 
 logger = logging.getLogger(__name__)
 
-# Upper bound on how many documents one auto-detected schema may pull in.
-AUTO_SCHEMA_MAX_DOCS = 25
+# Upper bound on how many documents one auto-detected schema may pull in. Real
+# standards need more than one might think (SDMX, HL7 v3 multicacheschemas); the
+# summed size is capped separately by MAX_UPLOAD_MB.
+AUTO_SCHEMA_MAX_DOCS = 100
 
 
 def is_schema_document(data: bytes) -> bool:

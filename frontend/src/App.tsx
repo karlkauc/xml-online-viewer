@@ -21,6 +21,7 @@ import { DesktopAppCard } from "./components/DesktopAppCard";
 import { FamilyFooter } from "./components/FamilyFooter";
 import clsx from "clsx";
 import { Uploader } from "./components/Uploader";
+import { FundsXmlStart } from "./components/FundsXmlStart";
 import { XmlTreeView } from "./components/XmlTreeView/XmlTreeView";
 import { DiagramView } from "./components/DiagramView/DiagramView";
 import { ValidationPanel } from "./components/ValidationPanel";
@@ -483,11 +484,17 @@ export default function App() {
           <div className="h-full overflow-y-auto">
             <div className="min-h-full flex items-center justify-center p-4 md:p-6">
             <div className="max-w-lg text-center">
-              <h2 className="text-xl font-semibold mb-2">Start with an XML file</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-                Drop it into <strong>XML data</strong> above — your file is not stored, and no account
-                is needed.
-              </p>
+              {isFundsXmlRoute ? (
+                <FundsXmlStart schema={xsdInfo?.main_filename ?? null} onFile={onXmlFile} />
+              ) : (
+                <>
+                  <h2 className="text-xl font-semibold mb-2">Start with an XML file</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
+                    Drop it into <strong>XML data</strong> above — your file is not stored, and no
+                    account is needed.
+                  </p>
+                </>
+              )}
               <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1.5 mb-5 text-left inline-block">
                 {[
                   ["🌳", "Browse the document as a collapsible tree or as a diagram"],

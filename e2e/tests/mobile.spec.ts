@@ -223,3 +223,18 @@ test.describe("schema split over several files", () => {
     await expectSchemaLoaded(page, "other.xsd");
   });
 });
+
+test.describe("an XML document in the schema loader", () => {
+  test("is offered as the document instead", async ({ page }) => {
+    await loadXml(page);
+    const files = page.getByRole("button", { name: /Files/ });
+    if ((await files.getAttribute("aria-expanded")) === "false") await files.click();
+    const other = { name: "orders.xml", mimeType: "application/xml", buffer: Buffer.from("<orders><order/></orders>") };
+    await page.locator('input[type="file"]').nth(1).setInputFiles(other);
+    await expect(page.getByRole("alert").filter({ hasText: "this is an XML document" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Think this is wrong? Report it" })).toBeVisible();
+    await page.getByRole("button", { name: "Load it as the XML document instead" }).click();
+    await expect(page.getByText(/orders\.xml/).first()).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});

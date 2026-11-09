@@ -115,6 +115,16 @@ def pretty_print(xml_bytes: bytes) -> bytes:
     return etree.tostring(tree, pretty_print=True, encoding="UTF-8", xml_declaration=True)
 
 
+def node_limit_message(count: int | None = None) -> str:
+    size = f" has {count:,} nodes, which" if count is not None else ""
+    return (
+        f"XML document{size} exceeds the {settings.max_xml_nodes:,}-node limit of this site. "
+        "Validation and the tree view need the whole document in memory; for files this large, "
+        "run the viewer yourself with a higher MAX_XML_NODES or use the desktop app "
+        "FreeXmlToolkit (see /features/large-files)"
+    )
+
+
 def _qname_parts(el: etree._Element) -> tuple[str | None, str | None, str | None]:
     """Return (prefix, local_name, namespace) for an element."""
     qn = etree.QName(el)
@@ -141,9 +151,7 @@ def _build_node(
     counter: list[int],
 ) -> XmlNode:
     if counter[0] >= settings.max_xml_nodes:
-        raise SecurityError(
-            f"XML document exceeds the {settings.max_xml_nodes}-node limit"
-        )
+        raise SecurityError(node_limit_message())
     node_id = str(counter[0])
     counter[0] += 1
 
@@ -258,6 +266,12 @@ def parse_xml(data: bytes, filename: str, *, base_url: str | None = None) -> Sto
         raise XmlError(humanize_syntax_error(exc, data)) from exc
     tree = etree.parse(BytesIO(pretty), make_parser())
     root_el = tree.getroot()
+
+    # Count first (a C-level walk): building the node models is what takes
+    # seconds on a big document, so an oversized one is refused before that.
+    node_count = sum(1 for _ in root_el.iter())
+    if node_count > settings.max_xml_nodes:
+        raise SecurityError(node_limit_message(node_count))
 
     line_to_id: dict[int, str] = {}
     counter = [0]
