@@ -21,6 +21,12 @@ _BOT_RE = re.compile(
 # Scanners like to pose as long-gone browsers (Chrome 33, Firefox 21); real visitors are far newer.
 _ENGINE_VERSION_RE = re.compile(r"\b(?:Chrome|Firefox)/(\d+)")
 _MIN_ENGINE_VERSION = 100
+# Since Chrome 101 a real Chrome (desktop and Android) reports "Chrome/N.0.0.0".
+# A full build number ("Chrome/128.0.6613.85") comes from automation copying an
+# old UA string — the referrer-spam waves that land on /fundsxml look like this.
+# Android WebViews ("; wv)") and Electron apps still send the full version.
+_FULL_CHROME_VERSION_RE = re.compile(r"\bChrome/\d+\.0\.[1-9]\d*\.\d+")
+_FULL_VERSION_OK_RE = re.compile(r"; wv\)|Electron/|Version/4\.0 Chrome/")
 # Same trick with Safari (a crawler as iOS 13 Safari, one visitor per hit). Only real Safari
 # sends "Version/N … Safari/"; Chrome/Firefox on iOS (CriOS/FxiOS) and Android WebViews do not.
 _SAFARI_VERSION_RE = re.compile(r"\bVersion/(\d+)[\d.]* (?:Mobile/\S+ )?Safari/")
@@ -106,6 +112,8 @@ def classify_device(user_agent: str | None, referrer: str | None = None) -> str:
         return "bot"
     engine = _ENGINE_VERSION_RE.search(user_agent)
     if engine and int(engine.group(1)) < _MIN_ENGINE_VERSION:
+        return "bot"
+    if _FULL_CHROME_VERSION_RE.search(user_agent) and not _FULL_VERSION_OK_RE.search(user_agent):
         return "bot"
     safari = _SAFARI_VERSION_RE.search(user_agent)
     if safari and int(safari.group(1)) < _MIN_SAFARI_VERSION:

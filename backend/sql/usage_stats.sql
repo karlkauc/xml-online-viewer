@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS usage_event (
   diagnostic_count int,                  -- unused (NULL) in this app
   error_count      int,                  -- validate/export: number of validation errors
   duration_ms      int,
-  status           text,                 -- ok | invalid | parse_error | rejected
+  status           text,                 -- ok | invalid | parse_error | needs_choice | rejected
   error_detail     text,                 -- exception message, truncated to 255
   utm_source       text,                 -- page_view: ?utm_source= slug (sister sites, posts), else NULL
   utm_medium       text,

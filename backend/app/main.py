@@ -24,7 +24,7 @@ from app.api.releases import router as releases_router
 from app.api.usage import router as usage_router
 from app.api.validate import router as validate_router
 from app.api.xml import router as xml_router
-from app.api.xsd import MainSchemaChoice
+from app.api.xsd import SchemaProblem
 from app.api.xsd import router as xsd_router
 from app.config import settings
 from app.logging_setup import configure_logging, new_request_id, request_id_var
@@ -163,9 +163,9 @@ app.state.limiter = limiter
 app.state.feedback = FeedbackStore(settings.feedback_db_url, settings.feedback_db_password)
 
 
-@app.exception_handler(MainSchemaChoice)
-async def _main_schema_choice(request: Request, exc: MainSchemaChoice) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": exc.detail, "candidates": exc.candidates})
+@app.exception_handler(SchemaProblem)
+async def _schema_problem(request: Request, exc: SchemaProblem) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": exc.detail, **exc.extra})
 
 
 @app.exception_handler(RateLimitExceeded)

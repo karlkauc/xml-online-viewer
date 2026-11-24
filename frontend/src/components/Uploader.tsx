@@ -96,10 +96,17 @@ function SourceLoader({
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [choice, setChoice] = useState<{ files: File[]; candidates: string[]; main: string } | null>(null);
+  // The uploaded schema imports files that were not part of the upload: keep
+  // what was sent and ask for exactly those (telemetry showed people re-sending
+  // the same single file until they gave up).
+  const [incomplete, setIncomplete] = useState<{ files: File[]; missing: string[]; main?: string } | null>(
+    null,
+  );
   const [dragOver, setDragOver] = useState(false);
   // Finger input has no drag-and-drop; say so instead of inviting a drop.
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const missingInput = useRef<HTMLInputElement | null>(null);
   const lastInput = useRef<LoaderInput | null>(null);
 
   // A document may also be loaded from outside this panel (the empty-state
@@ -142,17 +149,41 @@ function SourceLoader({
       if (files.length === 0) return;
       lastInput.current = files.length === 1 ? { kind: "file", file: files[0] } : null;
       if (!mainFilename) setChoice(null);
+      setIncomplete(null);
       guarded(async () => {
         try {
           await onFile(files, mainFilename);
           setChoice(null);
         } catch (err) {
-          if (!(err instanceof ApiError) || !err.candidates?.length) throw err;
-          setChoice({ files, candidates: err.candidates, main: err.candidates[0] });
+          if (!(err instanceof ApiError)) throw err;
+          if (err.candidates?.length) {
+            setChoice({ files, candidates: err.candidates, main: err.candidates[0] });
+            return;
+          }
+          const isZip = files.some((f) => /\.zip$/i.test(f.name));
+          if (multiple && !isZip && err.missing?.length) {
+            // A single file is the main schema; keep it so the added files
+            // cannot make the main one ambiguous.
+            const main = mainFilename ?? (files.length === 1 ? files[0].name : undefined);
+            setIncomplete({ files, missing: err.missing, main });
+            return;
+          }
+          throw err;
         }
       }, files[0].name);
     },
-    [guarded, onFile],
+    [guarded, onFile, multiple],
+  );
+
+  /** Re-send the files of an incomplete schema together with the added ones;
+   * a file picked again replaces the earlier copy of the same name. */
+  const addMissingFiles = useCallback(
+    (added: File[]) => {
+      if (!incomplete || added.length === 0) return;
+      const names = new Set(added.map((f) => f.name));
+      loadFiles([...incomplete.files.filter((f) => !names.has(f.name)), ...added], incomplete.main);
+    },
+    [incomplete, loadFiles],
   );
 
   return (
@@ -200,7 +231,8 @@ function SourceLoader({
               e.preventDefault();
               setDragOver(false);
               const dropped = Array.from(e.dataTransfer.files ?? []);
-              loadFiles(multiple ? dropped : dropped.slice(0, 1));
+              if (incomplete) addMissingFiles(dropped);
+              else loadFiles(multiple ? dropped : dropped.slice(0, 1));
             }}
           >
             <input
@@ -241,7 +273,54 @@ function SourceLoader({
                 </button>
               </p>
             )}
-            {multiple && !choice && (
+            {incomplete && (
+              <div className="mt-3 text-left text-xs" role="alert">
+                <p className="text-amber-700 dark:text-amber-400">
+                  {incomplete.main ? <span className="font-mono">{incomplete.main}</span> : "The schema"} imports{" "}
+                  {incomplete.missing.length === 1 ? "a file" : `${incomplete.missing.length} files`} you did
+                  not load:
+                </p>
+                <ul className="mt-1 max-h-28 overflow-auto font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                  {incomplete.missing.slice(0, 12).map((name) => (
+                    <li key={name} className="truncate" title={name}>
+                      {name}
+                    </li>
+                  ))}
+                  {incomplete.missing.length > 12 && <li>… and {incomplete.missing.length - 12} more</li>}
+                </ul>
+                <input
+                  ref={missingInput}
+                  type="file"
+                  accept=".xsd,application/xml"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    addMissingFiles(Array.from(e.target.files ?? []));
+                    e.target.value = "";
+                  }}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() => missingInput.current?.click()}
+                  >
+                    Add the missing files…
+                  </button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => setIncomplete(null)}>
+                    Cancel
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  They usually sit next to the schema you picked; select them all at once.
+                  {incomplete.missing.some((m) => m.startsWith("../"))
+                    ? " Files from a parent folder (../) need one ZIP of the whole schema folder."
+                    : ""}
+                </p>
+              </div>
+            )}
+            {multiple && !choice && !incomplete && (
               <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
                 Schema split over several files? Select them all together, or load one ZIP.
               </p>
@@ -425,7 +504,7 @@ export function Uploader(props: UploaderProps) {
     <div className="flex flex-col md:flex-row gap-3">
       <SourceLoader
         title="XML data"
-        accept=".xml,application/xml,text/xml"
+        accept=".xml,.zip,application/xml,text/xml,application/zip"
         placeholder="<FundsXML4>…"
         status={props.xmlStatus}
         onFile={(files) => props.onXmlFile(files[0])}

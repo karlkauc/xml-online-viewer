@@ -327,3 +327,23 @@ def test_non_public_addresses_are_blocked(address: str) -> None:
 @pytest.mark.parametrize("address", ["8.8.8.8", "2606:4700::1111", "::ffff:8.8.8.8", "64:ff9b::808:808"])
 def test_public_addresses_are_allowed(address: str) -> None:
     assert not security._ip_is_private(address)
+
+
+def test_fetch_url_names_the_site_and_asks_for_xml(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b"<x/>")
+
+    _mock_network(monkeypatch, handler)
+    fetch_url("https://example.org/a.xml")
+    assert "xml-viewer.online" in seen[0].headers["user-agent"]
+    assert "python-httpx" not in seen[0].headers["user-agent"]
+    assert seen[0].headers["accept"].startswith("application/xml")
+
+
+def test_a_403_suggests_downloading_the_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mock_network(monkeypatch, lambda request: httpx.Response(403))
+    with pytest.raises(SecurityError, match=r"HTTP 403 — the site refuses automated downloads"):
+        fetch_url("https://example.org/a.xml")

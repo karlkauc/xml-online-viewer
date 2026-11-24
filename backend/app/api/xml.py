@@ -14,7 +14,7 @@ from app.api._common import _ms, read_upload, reject, reject_oversized_text
 from app.cache import xml_cache
 from app.parser.errors import utf8_bytes
 from app.parser.security import SecurityError, fetch_url
-from app.parser.xml_tree import StoredXml, XmlDocModel, XmlError, parse_xml
+from app.parser.xml_tree import StoredXml, XmlDocModel, XmlError, parse_xml, single_xml_from_zip
 from app.rate_limit import READ_LIMIT, WRITE_LIMIT, limiter
 from app.usage.context import emit
 from app.usage.events import schema_display_name
@@ -88,7 +88,19 @@ def _parse(data: bytes, filename: str, *, source: str, base_url: str | None = No
 @limiter.limit(WRITE_LIMIT)
 async def upload_xml(request: Request, file: UploadFile) -> XmlDocModel:
     content = await read_upload(file, event_type="xml_load")
-    return _parse(content, file.filename or "document.xml", source="upload")
+    filename = file.filename or "document.xml"
+    try:
+        inner = single_xml_from_zip(content)
+    except SecurityError as exc:
+        raise reject(
+            "xml_load", "upload", 413, str(exc), schema_name=schema_display_name("upload", filename)
+        ) from exc
+    if inner is None:
+        return _parse(content, filename, source="upload")
+    data, inner_name = inner
+    model = _parse(data, inner_name, source="upload")
+    model.notices.insert(0, f"{inner_name} was unpacked from the ZIP archive {filename}.")
+    return model
 
 
 @router.post("/xml/text", response_model=XmlDocModel)

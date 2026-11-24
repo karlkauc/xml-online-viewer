@@ -65,9 +65,16 @@ and the counted redirect `/go/freexmltoolkit` (`backend/app/api/go.py`).
   entity substitution. `fetch_url` prepends `https://` to a bare `host/path`.
 - **Multi-file XSD.** `POST /api/xsd/upload` takes one schema, one ZIP, or
   several loose files (repeated `file` field). When the main schema is
-  ambiguous the 422 carries `candidates` (`MainSchemaChoice`, handler in
-  `main.py`) and the Uploader offers the choice. A compile failure names the
-  `schemaLocation` targets missing from the set (`_missing_references`).
+  ambiguous the 422 carries `candidates` (`MainSchemaChoice`, handler for
+  `SchemaProblem` in `main.py`) and the Uploader offers the choice. A compile
+  failure names the `schemaLocation` targets missing from the set
+  (`_missing_references`); the 422 carries them as `missing`
+  (`MissingSchemaFiles`) and the Uploader asks for exactly those files, then
+  re-sends them with the first upload. Loose files are copied to the paths
+  their references expect (`_place_loose_files`: browsers send bare names),
+  and absolute `http(s)` imports of an upload are downloaded
+  (`schema_fetch.add_remote_references`, via `load_xsd(prepare=…)`).
+  The XML panel unpacks a ZIP holding exactly one `.xml` (`single_xml_from_zip`).
 - **Expired cache entries.** `TtlCache` expiry is sliding, and `api/client.ts`
   remembers how the current XML/XSD was loaded: on "XML/XSD not found or
   expired" `withReload` repeats that load (ids are content hashes) and retries.

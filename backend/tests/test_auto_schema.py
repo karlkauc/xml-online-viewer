@@ -337,3 +337,74 @@ def test_auto_returns_422_when_the_url_serves_something_that_is_not_a_schema(
     r = client.post("/api/xsd/auto", json={"xml_id": xml_id})
     assert r.status_code == 422
     assert "did not return an XML Schema" in r.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Uploads that import their base schemas by absolute URL
+# ---------------------------------------------------------------------------
+
+REMOTE_MAIN = b"""<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:b="urn:b"
+    targetNamespace="urn:m">
+  <xs:import namespace="urn:b" schemaLocation="https://schemas.example/v1/base.xsd"/>
+  <xs:element name="a" type="b:T"/>
+</xs:schema>"""
+REMOTE_BASE = b"""<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:b="urn:b"
+    targetNamespace="urn:b">
+  <xs:include schemaLocation="types.xsd"/>
+</xs:schema>"""
+REMOTE_TYPES = b"""<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:b">
+  <xs:simpleType name="T"><xs:restriction base="xs:string"/></xs:simpleType>
+</xs:schema>"""
+
+
+def test_upload_downloads_imports_given_by_absolute_url() -> None:
+    fetch = _fake_fetcher(
+        {
+            "https://schemas.example/v1/base.xsd": REMOTE_BASE,
+            "https://schemas.example/v1/types.xsd": REMOTE_TYPES,
+        }
+    )
+    files = schema_fetch.add_remote_references({"main.xsd": REMOTE_MAIN}, fetcher=fetch)
+    assert sorted(files) == [
+        "main.xsd",
+        "schemas.example/v1/base.xsd",
+        "schemas.example/v1/types.xsd",
+    ]
+    assert b'schemaLocation="schemas.example/v1/base.xsd"' in files["main.xsd"]
+    build_xmlschema(load_xsd_from_files(files, "main.xsd"))
+
+
+def test_an_uploaded_copy_wins_over_the_download() -> None:
+    calls: list[str] = []
+    fetch = _fake_fetcher({}, calls)
+    base = REMOTE_BASE.replace(
+        b'<xs:include schemaLocation="types.xsd"/>',
+        b'<xs:simpleType name="T"><xs:restriction base="xs:string"/></xs:simpleType>',
+    )
+    files = schema_fetch.add_remote_references({"main.xsd": REMOTE_MAIN, "base.xsd": base}, fetcher=fetch)
+    assert calls == []
+    assert b'schemaLocation="base.xsd"' in files["main.xsd"]
+
+
+def test_an_unreachable_import_is_still_reported_as_missing() -> None:
+    def fetch(url: str) -> FetchedResource:
+        raise SecurityError("fetching 'schemas.example' failed with HTTP 404")
+
+    files = schema_fetch.add_remote_references({"main.xsd": REMOTE_MAIN}, fetcher=fetch)
+    assert files == {"main.xsd": REMOTE_MAIN}
+
+
+def test_upload_route_resolves_absolute_imports(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(
+        schema_fetch,
+        "_default_fetch",
+        _fake_fetcher(
+            {
+                "https://schemas.example/v1/base.xsd": REMOTE_BASE,
+                "https://schemas.example/v1/types.xsd": REMOTE_TYPES,
+            }
+        ),
+    )
+    r = client.post("/api/xsd/upload", files=[("file", ("main.xsd", REMOTE_MAIN, "application/xml"))])
+    assert r.status_code == 200, r.text
+    assert len(r.json()["filenames"]) == 3

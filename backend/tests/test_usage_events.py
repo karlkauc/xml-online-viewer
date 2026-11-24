@@ -66,8 +66,16 @@ class TestDevice:
             "(KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 "
             "(KHTML, like Gecko) Version/12.1.2 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/128.0.6613.85 Safari/537.36",
         ):
             assert classify_device(ua) == "bot", ua
+        # Android WebView keeps the full Chrome version and is a real browser.
+        webview = (
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP1A; wv) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.39 Mobile Safari/537.36"
+        )
+        assert classify_device(webview) == "mobile"
         assert classify_device("") == "unknown"
         assert classify_device(None) == "unknown"
 

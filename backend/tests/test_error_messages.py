@@ -288,3 +288,31 @@ def test_misplaced_declaration_in_schema_is_quoted() -> None:
     )
     with pytest.raises(XsdError, match=r"before it: '<!-- generated -->'"):
         load_xsd(zip_bytes=None, main_filename="s.xsd", main_bytes=xsd)
+
+
+def test_incomplete_upload_lists_the_missing_files(client: TestClient) -> None:
+    r = _upload(client, {"main.xsd": MAIN_XSD})
+    assert r.status_code == 422
+    assert r.json()["missing"] == ["dep.xsd"]
+    # The client re-sends the first file together with the one it asked for.
+    again = _upload(client, {"main.xsd": MAIN_XSD, "dep.xsd": DEP_XSD})
+    assert again.status_code == 200, again.text
+
+
+def test_loose_files_land_where_the_schema_expects_them(client: TestClient) -> None:
+    main = MAIN_XSD.replace(b'schemaLocation="dep.xsd"', b'schemaLocation="./commons/dep.xsd"')
+    r = _upload(client, {"main.xsd": main, "dep.xsd": DEP_XSD})
+    assert r.status_code == 200, r.text
+    assert "commons/dep.xsd" in r.json()["filenames"]
+
+
+@pytest.mark.parametrize(
+    ("data", "needle"),
+    [
+        (b'<edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0"/>', "OData Viewer"),
+        (b'<definitions xmlns="http://schemas.xmlsoap.org/wsdl/"/>', "WSDL service description"),
+    ],
+)
+def test_service_descriptions_in_the_xsd_field_point_elsewhere(data: bytes, needle: str) -> None:
+    with pytest.raises(XsdError, match=needle):
+        load_xsd(zip_bytes=None, main_filename="x.xsd", main_bytes=data)

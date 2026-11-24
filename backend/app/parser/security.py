@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import httpx
 from lxml import etree
 
+from app import __version__
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -285,6 +286,14 @@ def _read_capped(response: httpx.Response, deadline: float) -> bytes:
     return b"".join(chunks)
 
 
+# httpx would announce itself as "python-httpx/…", which bot filters of
+# library and archive sites answer with 403. Say who is asking instead.
+FETCH_USER_AGENT = (
+    f"Mozilla/5.0 (compatible; xml-viewer.online/{__version__}; +https://www.xml-viewer.online)"
+)
+FETCH_ACCEPT = "application/xml, text/xml, application/xsd+xml;q=0.9, */*;q=0.8"
+
+
 def fetch_url(url: str) -> FetchedResource:
     """Fetch a document by URL, enforcing all SSRF mitigations: scheme/host
     checks, private-IP block, connection pinned to a validated IP (DNS-rebinding
@@ -308,7 +317,12 @@ def fetch_url(url: str) -> FetchedResource:
                 target,
                 # identity: httpx inflates gzip per chunk with no limit, so one small
                 # chunk could expand far beyond the size cap before it is counted.
-                headers={"Host": parsed.netloc.decode("ascii"), "Accept-Encoding": "identity"},
+                headers={
+                    "Host": parsed.netloc.decode("ascii"),
+                    "Accept-Encoding": "identity",
+                    "Accept": FETCH_ACCEPT,
+                    "User-Agent": FETCH_USER_AGENT,
+                },
                 extensions={"sni_hostname": host},
             ) as response:
                 if response.is_redirect:
@@ -321,8 +335,14 @@ def fetch_url(url: str) -> FetchedResource:
                     current = str(httpx.URL(current).join(location))
                     continue
                 if response.status_code >= 400:
+                    hint = (
+                        " — the site refuses automated downloads; open the URL in your "
+                        "browser, save the file and upload it instead"
+                        if response.status_code in (401, 403, 429)
+                        else ""
+                    )
                     raise SecurityError(
-                        f"fetching {host!r} failed with HTTP {response.status_code}"
+                        f"fetching {host!r} failed with HTTP {response.status_code}{hint}"
                     )
                 content = _read_capped(response, deadline)
                 content_type = response.headers.get("content-type")

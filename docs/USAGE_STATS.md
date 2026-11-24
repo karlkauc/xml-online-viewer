@@ -25,7 +25,7 @@ One row per event in table `usage_event` (DDL: `backend/sql/usage_stats.sql`):
 | `event_type` | `page_view` (SPA shell or content page served), `xml_load`, `xsd_load`, `validate`, `export` (`source` = `excel`, or `excel_shared` for a report opened from a link), `share` (`source` = `url` or `report`), `feature` (a browser-only feature was used, pinged via `POST /api/usage/feature?name=`: `source` = `diagram_png`, `diagram_svg`, `search_open`; `search_open` at most once per page load; unknown names get a 400 and no row) |
 | `visitor_hash` | `sha256(daily_salt ‖ ip ‖ user-agent)[:32]`; salt = `HMAC(USAGE_HASH_SECRET, date)` ⇒ same visitor within a day, unlinkable across days, not reversible |
 | `country_code` | ISO-3166-1 alpha-2 derived server-side via MaxMind GeoLite2; NULL if unknown |
-| `user_agent`, `device` | UA string (≤255) and a cheap classification `desktop`/`mobile`/`bot`/`unknown` (`bot` also for any request whose Referer is a WordPress admin/login path — scanners walking a wordlist, whatever their UA) |
+| `user_agent`, `device` | UA string (≤255) and a cheap classification `desktop`/`mobile`/`bot`/`unknown` (`bot` also for any request whose Referer is a WordPress admin/login path — scanners walking a wordlist, whatever their UA — and since 2026-11-24 for a Chrome UA with a full build number such as `Chrome/128.0.6613.85`: real Chrome sends `N.0.0.0`; Android WebView and Electron are exempt) |
 | `referrer` | `scheme://host/path` of the `Referer` header, query dropped |
 | `utm_source`, `utm_medium`, `utm_campaign` | page_view only — the request's `utm_*` parameters, lower-cased, kept only as slugs of ≤64 `[a-z0-9._-]`. The sister sites link here with `utm_source=<site>&utm_medium=sister` (all three send no Referer) |
 | `path` | page_view only — path served. Only routes in `ROUTE_META` (`backend/app/spa.py`: `/`, `/fundsxml`, `/report`) and content pages (`/errors/…`, `/features/…`, `/validate/…`) emit a page_view; any other unknown path is answered with 404 and **not** recorded, so scanner probes (`/wp-admin/install.php`, `/.env`, …) never reach the table. `/go/freexmltoolkit/docs` or `/go/freexmltoolkit/releases` with `source=freexmltoolkit` and `status_code=302` is an outbound click on a FreeXmlToolkit link (Learn more / Download); `/go/sponsor` with `source=sponsor` is a click on the GitHub Sponsors link (both counted redirects, see `app/api/go.py`); `/go/xsd-viewer`, `/go/odata-viewer` are clicks to the sister sites. |
@@ -35,14 +35,16 @@ One row per event in table `usage_event` (DDL: `backend/sql/usage_stats.sql`):
 | `file_count` | `xsd_load`: number of files in the schema set; `xml_load`: 1 |
 | `element_count` | `xml_load`: `node_count` of the document |
 | `error_count` | `validate`/`export`: number of validation errors |
-| `duration_ms`, `status`, `status_code`, `error_detail` | timing and outcome (`ok`/`invalid`/`parse_error`/`rejected`); `error_detail` is the exception message, ≤255 chars |
+| `duration_ms`, `status`, `status_code`, `error_detail` | timing and outcome (`ok`/`invalid`/`parse_error`/`needs_choice`/`rejected`); `error_detail` is the exception message, ≤255 chars |
 | `target_namespace`, `type_count`, `diagnostic_count` | always NULL here (kept for column parity with the XSD viewer) |
 | `app_version`, `received_at` | build version, server timestamp |
 
 Status semantics: `rejected` = size limit, SSRF guard, unknown/expired cache
 id or unknown release, and a `validate` whose cached schema cannot be set up
 for validation (422); `parse_error` = malformed XML / XSD compile error on load;
-`invalid` = validation ran and found errors.
+`invalid` = validation ran and found errors; `needs_choice` = an `xsd_load` of several schemas
+where the user has to pick the main one (not a failure — the next load with the choice usually succeeds;
+rows before 2026-11-24 recorded it as `parse_error`).
 
 Not tracked: `GET /api/xml/{id}` (cache read) and the FundsXML release
 listing.

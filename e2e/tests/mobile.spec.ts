@@ -201,12 +201,16 @@ test.describe("schema split over several files", () => {
     await expect(page.getByText(new RegExp(`(✓ |XSD: )${name.replace(".", "\\.")}`)).first()).toBeVisible();
   }
 
-  test("the main file alone names what is missing; with its import it loads", async ({ page }) => {
+  test("the main file alone asks for its import; adding it loads the schema", async ({ page }) => {
     await loadDocument(page);
-    const input = page.locator('input[type="file"]').nth(1);
-    await input.setInputFiles(MAIN);
-    await expect(page.getByRole("alert").filter({ hasText: "1 imported or included file is missing (dep.xsd)" })).toBeVisible();
-    await input.setInputFiles([DEP, MAIN]);
+    await page.locator('input[type="file"]').nth(1).setInputFiles(MAIN);
+    const prompt = page.getByRole("alert").filter({ hasText: "imports a file you did not load" });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByText("dep.xsd", { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Add the missing files…" }).click();
+    await (await chooser).setFiles(DEP);
     await expectSchemaLoaded(page, "main.xsd");
   });
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import posixpath
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -36,6 +37,15 @@ class AmbiguousMainError(XsdError):
             f"could not tell which of the {len(candidates)} schemas is the main one — choose "
             f"it and load again (API: main_filename); candidates: {', '.join(candidates)}"
         )
+
+
+class IncompleteSchemaError(XsdError):
+    """The schema does not compile because ``schemaLocation`` targets are not
+    part of the set; ``missing`` lets the client ask for exactly those files."""
+
+    def __init__(self, message: str, missing: list[str]) -> None:
+        self.missing = missing
+        super().__init__(message)
 
 
 @dataclass
@@ -174,6 +184,38 @@ def _missing_references(files: dict[str, bytes]) -> list[str]:
     return list(missing)
 
 
+_WSDL_NAMESPACES = ("http://schemas.xmlsoap.org/wsdl/", "http://www.w3.org/ns/wsdl")
+
+
+def _place_loose_files(files: dict[str, bytes]) -> None:
+    """Copy loosely uploaded files to the paths their references expect, in-place.
+
+    A browser sends bare file names, so a schema importing ``commons/types.xsd``
+    can never resolve against an uploaded ``types.xsd`` — the user did supply
+    it, though. Only targets inside the set are filled (``../x.xsd`` needs a
+    ZIP), and only by an unambiguous file name.
+    """
+    while True:
+        by_name: dict[str, list[str]] = {}
+        for name in files:
+            by_name.setdefault(posixpath.basename(name), []).append(name)
+        added = False
+        for name, data in list(files.items()):
+            if not name.lower().endswith(".xsd"):
+                continue
+            base = posixpath.dirname(name)
+            for loc in _iter_schema_locations(data):
+                target = posixpath.normpath(posixpath.join(base, loc.replace("\\", "/")))
+                if target in files or target.startswith("../") or target.startswith("/"):
+                    continue
+                sources = by_name.get(posixpath.basename(target), [])
+                if len(sources) == 1:
+                    files[target] = files[sources[0]]
+                    added = True
+        if not added:
+            return
+
+
 def _not_a_schema_message(root: etree._Element) -> str:
     """Explain a well-formed file in the XSD field whose root is not ``xs:schema``."""
     qname = etree.QName(root)
@@ -184,6 +226,17 @@ def _not_a_schema_message(root: etree._Element) -> str:
             f"a schema in the namespace {qname.namespace!r}, not XML Schema ({XSD_NS})"
             if qname.namespace
             else f"a <schema> without the XML Schema namespace ({XSD_NS})"
+        )
+    elif qname.localname == "Edmx":
+        return (
+            "not an XSD schema: this is an XML document (root element <Edmx>), an OData "
+            "service model ($metadata, CSDL). To browse it, open it in the OData Viewer "
+            "(https://www.odata-viewer.online); to view it as a document, load it in the XML field"
+        )
+    elif qname.localname == "definitions" and qname.namespace in _WSDL_NAMESPACES:
+        return (
+            "not an XSD schema: this is a WSDL service description. Its schemas live inside "
+            "<wsdl:types> or in the .xsd files it imports — load those .xsd files here instead"
         )
     else:
         what = f"an XML document (root element <{qname.localname}>)"
@@ -305,11 +358,12 @@ def build_xmlschema(stored: StoredXsd) -> etree.XMLSchema:
             if len(missing) > _MAX_LISTED_FILES:
                 listed += ", …"
             noun = "file is" if len(missing) == 1 else "files are"
-            raise XsdError(
+            raise IncompleteSchemaError(
                 f"the schema is incomplete: {len(missing)} imported or included {noun} "
                 f"missing ({listed}), so it does not compile. Upload the schema together "
-                f"with its imported and included files as one ZIP archive. The compiler "
-                f"stopped at: {detail}"
+                f"with its imported and included files (several files at once, or one ZIP "
+                f"archive). The compiler stopped at: {detail}",
+                missing,
             ) from exc
         except etree.XMLSyntaxError as exc:
             if not main_bytes.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"<"):
@@ -331,10 +385,14 @@ def load_xsd(
     main_filename: str | None,
     main_bytes: bytes | None,
     files: dict[str, bytes] | None = None,
+    prepare: Callable[[dict[str, bytes]], dict[str, bytes]] | None = None,
 ) -> StoredXsd:
     """Build a :class:`StoredXsd` from a ZIP, a single schema file or several
     loose files (``files``: name -> bytes), verifying it compiles. Raises
-    :class:`XsdError` on any failure."""
+    :class:`XsdError` on any failure.
+
+    ``prepare`` may complete the set before it is compiled — the API passes
+    ``schema_fetch.add_remote_references`` to download absolute-URL imports."""
     if files is not None:
         loose = files
         files = {}
@@ -342,6 +400,7 @@ def load_xsd(
             inspect_dtd(data)
             files[str(_safe_relative_path(name, name))] = data
         main = _pick_main(files, main_filename, "the upload")
+        _place_loose_files(files)
     elif zip_bytes is not None:
         files, main = _files_from_zip(zip_bytes, main_filename)
     else:
@@ -351,6 +410,8 @@ def load_xsd(
         name = str(_safe_relative_path(main_filename or "schema.xsd", "schema.xsd"))
         files, main = {name: main_bytes}, name
 
+    if prepare is not None:
+        files = prepare(files)
     _inject_bundled_dependencies(files)
     stored = StoredXsd(xsd_id="", main_filename=main, files=files)
     # Compile once now to fail fast on an invalid schema.

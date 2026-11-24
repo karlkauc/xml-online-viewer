@@ -16,10 +16,11 @@ from app.api._common import _ms, read_upload, reject, reject_oversized_text
 from app.cache import xml_cache, xsd_cache
 from app.config import settings
 from app.parser.errors import utf8_bytes
-from app.parser.schema_fetch import fetch_schema_set
+from app.parser.schema_fetch import add_remote_references, fetch_schema_set
 from app.parser.security import SecurityError, fetch_url
 from app.parser.xsd_store import (
     AmbiguousMainError,
+    IncompleteSchemaError,
     StoredXsd,
     XsdError,
     load_xsd,
@@ -43,13 +44,30 @@ class UrlPayload(BaseModel):
     url: str = Field(..., description="Absolute http(s) URL of the XSD")
 
 
-class MainSchemaChoice(HTTPException):
-    """422 that also lists the schemas to choose the main one from; rendered
-    by the handler in ``main.py`` as ``{"detail": …, "candidates": […]}``."""
+class SchemaProblem(HTTPException):
+    """422 with machine-readable fields next to ``detail``; rendered by the
+    handler in ``main.py`` as ``{"detail": …, **extra}``."""
+
+    def __init__(self, detail: str, **extra: list[str]) -> None:
+        super().__init__(status_code=422, detail=detail)
+        self.extra = extra
+
+
+class MainSchemaChoice(SchemaProblem):
+    """Lists the schemas to choose the main one from (``candidates``)."""
 
     def __init__(self, detail: str, candidates: list[str]) -> None:
-        super().__init__(status_code=422, detail=detail)
+        super().__init__(detail, candidates=candidates)
         self.candidates = candidates
+
+
+class MissingSchemaFiles(SchemaProblem):
+    """Lists the ``schemaLocation`` targets the set lacks (``missing``), so the
+    client can ask for exactly those files and load again."""
+
+    def __init__(self, detail: str, missing: list[str]) -> None:
+        super().__init__(detail, missing=missing)
+        self.missing = missing
 
 
 class XsdInfo(BaseModel):
@@ -97,12 +115,14 @@ def ingest_xsd(
             schema_name=name,
             input_bytes=input_bytes,
             duration_ms=_ms(started),
-            status="parse_error",
+            status="needs_choice" if isinstance(exc, AmbiguousMainError) else "parse_error",
             status_code=status_code,
             error_detail=str(exc),
         )
         if isinstance(exc, AmbiguousMainError):
             raise MainSchemaChoice(str(exc), exc.candidates) from exc
+        if isinstance(exc, IncompleteSchemaError):
+            raise MissingSchemaFiles(str(exc), exc.missing) from exc
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     stored.source = source
     info = _finalize(stored)
@@ -137,7 +157,11 @@ def _load(
         schema_name=schema_name,
         input_bytes=input_bytes,
         loader=lambda: load_xsd(
-            zip_bytes=zip_bytes, main_filename=main_filename, main_bytes=main_bytes, files=files
+            zip_bytes=zip_bytes,
+            main_filename=main_filename,
+            main_bytes=main_bytes,
+            files=files,
+            prepare=add_remote_references,
         ),
     )
 
@@ -158,14 +182,17 @@ async def upload_xsd(
     name = file.filename or "schema.xsd"
     is_zip = name.lower().endswith(".zip") or (file.content_type or "").endswith("zip")
     if is_zip:
-        return _load(
+        return await asyncio.to_thread(
+            _load,
             source="upload",
             schema_name=main_filename or name,
             zip_bytes=content,
             main_filename=main_filename,
             main_bytes=None,
         )
-    return _load(source="upload", schema_name=name, zip_bytes=None, main_filename=name, main_bytes=content)
+    return await asyncio.to_thread(
+        _load, source="upload", schema_name=name, zip_bytes=None, main_filename=name, main_bytes=content
+    )
 
 
 async def _upload_loose_files(uploads: list[UploadFile], main_filename: str | None) -> XsdInfo:
@@ -186,7 +213,8 @@ async def _upload_loose_files(uploads: list[UploadFile], main_filename: str | No
         files[upload.filename or f"schema-{len(files) + 1}.xsd"] = data
     if any(filename.lower().endswith(".zip") for filename in files):
         raise refuse(400, "upload either one ZIP archive or the schema files themselves, not both")
-    return _load(
+    return await asyncio.to_thread(
+        _load,
         source="upload",
         schema_name=main_filename or uploads[0].filename,
         zip_bytes=None,
@@ -201,7 +229,8 @@ async def _upload_loose_files(uploads: list[UploadFile], main_filename: str | No
 async def upload_xsd_text(request: Request, payload: TextPayload) -> XsdInfo:
     data = utf8_bytes(payload.content)
     reject_oversized_text(data, event_type="xsd_load", filename=payload.filename)
-    return _load(
+    return await asyncio.to_thread(
+        _load,
         source="text",
         schema_name=payload.filename,
         zip_bytes=None,

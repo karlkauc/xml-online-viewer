@@ -11,10 +11,13 @@ export class ApiError extends Error {
   status: number;
   /** Schemas to choose the main one from, when the server could not tell. */
   candidates?: string[];
-  constructor(message: string, status: number, candidates?: string[]) {
+  /** schemaLocation targets the uploaded schema set lacks. */
+  missing?: string[];
+  constructor(message: string, status: number, candidates?: string[], missing?: string[]) {
     super(message);
     this.status = status;
     this.candidates = candidates;
+    this.missing = missing;
   }
 }
 
@@ -22,14 +25,16 @@ async function handle<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
     let candidates: string[] | undefined;
+    let missing: string[] | undefined;
     try {
       const body = await response.json();
       if (typeof body?.detail === "string") detail = body.detail;
       if (Array.isArray(body?.candidates)) candidates = body.candidates;
+      if (Array.isArray(body?.missing)) missing = body.missing;
     } catch {
       // ignore parse errors; fall back to status
     }
-    throw new ApiError(detail, response.status, candidates);
+    throw new ApiError(detail, response.status, candidates, missing);
   }
   return (await response.json()) as T;
 }

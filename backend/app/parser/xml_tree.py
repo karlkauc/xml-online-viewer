@@ -10,6 +10,8 @@ without re-resolving XPaths.
 
 from __future__ import annotations
 
+import posixpath
+import zipfile
 from dataclasses import dataclass, field
 from io import BytesIO
 from urllib.parse import urljoin, urlsplit
@@ -246,6 +248,40 @@ def _schema_hints(root_el: etree._Element, base_url: str | None) -> list[SchemaH
             SchemaHint(namespace=None, location=bare, resolved_url=_resolve_location(bare, base_url))
         )
     return hints
+
+
+def single_xml_from_zip(data: bytes) -> tuple[bytes, str] | None:
+    """The one XML document inside a ZIP archive, or None.
+
+    People zip large exports before uploading them. An archive holding exactly
+    one ``.xml`` file (macOS ``__MACOSX`` metadata ignored) is unpacked under
+    the same zip-bomb caps as schema ZIPs; anything else — several documents,
+    an Office file — keeps the "this is a ZIP archive" error.
+    """
+    if not data.startswith(b"PK\x03\x04"):
+        return None
+    try:
+        archive = zipfile.ZipFile(BytesIO(data))
+    except zipfile.BadZipFile:
+        return None
+    candidates = [
+        info
+        for info in archive.infolist()
+        if not info.is_dir()
+        and info.filename.lower().endswith(".xml")
+        and not info.filename.startswith("__MACOSX/")
+        and not posixpath.basename(info.filename).startswith("._")
+    ]
+    if len(candidates) != 1:
+        return None
+    info = candidates[0]
+    if info.file_size > min(settings.max_zip_uncompressed_bytes, settings.max_upload_bytes):
+        raise SecurityError(
+            f"the XML file inside the ZIP is larger than the {settings.max_upload_mb} MB limit"
+        )
+    if info.compress_size > 0 and info.file_size / info.compress_size > settings.max_zip_ratio:
+        raise SecurityError(f"ZIP entry {info.filename!r} has a suspicious compression ratio")
+    return archive.read(info), posixpath.basename(info.filename)
 
 
 def parse_xml(data: bytes, filename: str, *, base_url: str | None = None) -> StoredXml:

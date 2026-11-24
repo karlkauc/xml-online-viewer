@@ -185,3 +185,28 @@ def test_large_json_responses_are_gzipped(client) -> None:
     )
     assert r.status_code == 200
     assert "content-encoding" not in r.headers
+
+
+def _zip_of(files: dict[str, bytes]) -> bytes:
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_a_zip_with_one_xml_document_is_unpacked(client: TestClient) -> None:
+    archive = _zip_of({"export/data.xml": b"<root><a/></root>", "__MACOSX/export/._data.xml": b"x"})
+    r = client.post("/api/xml/upload", files={"file": ("data.zip", archive, "application/zip")})
+    assert r.status_code == 200, r.text
+    assert r.json()["filename"] == "data.xml"
+    assert r.json()["notices"][0] == "data.xml was unpacked from the ZIP archive data.zip."
+
+
+def test_a_zip_with_several_documents_is_still_refused(client: TestClient) -> None:
+    archive = _zip_of({"a.xml": b"<a/>", "b.xml": b"<b/>"})
+    r = client.post("/api/xml/upload", files={"file": ("two.zip", archive, "application/zip")})
+    assert r.status_code == 400
+    assert "ZIP archive" in r.json()["detail"]
